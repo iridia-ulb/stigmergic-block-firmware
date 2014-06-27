@@ -19,7 +19,7 @@ SIZE       = $(TOOLROOT)/avr-size
 OBJ        = $(PROGRAM).o
 OPTIMIZE = -Os -fno-inline-small-functions -fno-split-wide-types -mrelax
 
-DEFS = -DBAUD_RATE=115200 -DLED=B5 -DLED_START_FLASHES=3
+DEFS = -DBAUD_RATE=57600 -DLED=B5 -DLED_START_FLASHES=3
 LIBS =
 
 #---------------------------------------------------------------------------
