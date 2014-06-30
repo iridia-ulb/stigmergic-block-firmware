@@ -87,7 +87,7 @@ HardwareSerial::HardwareSerial() {
    *_ucsrb = 0;
 
    /* start up serial */
-   begin(115200);
+   begin(57600);
 }
 
 // Public Methods //////////////////////////////////////////////////////////////

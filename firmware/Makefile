@@ -80,7 +80,7 @@ CFLAGS_STD    = -std=c++11
 CFLAGS        += $(EXTRA_FLAGS) $(EXTRA_CFLAGS)
 CXXFLAGS      += -fno-exceptions $(CFLAGS_STD) -I$(SRCDIR) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS)
 ASFLAGS       += -x assembler-with-cpp
-LDFLAGS       += -mmcu=$(MCU) -Wl,--gc-sections -Wl,--verbose -Wl,-Tsource/avr5.xn -O$(OPTIMIZATION_LEVEL) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_LDFLAGS)
+LDFLAGS       += -mmcu=$(MCU) -Wl,--gc-sections -Wl,-Tsource/avr5.xn -O$(OPTIMIZATION_LEVEL) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_LDFLAGS)
 SIZEFLAGS     ?= --mcu=$(MCU) -C
 
 avr_size = $(SIZE) $(2)
@@ -151,7 +151,7 @@ $(OBJDIR):
 		$(MKDIR) $(OBJDIR)
 
 $(TARGET_ELF): $(LOCAL_OBJS)
-		$(CC) -v $(LDFLAGS) -o $@ $(OTHER_OBJS) $(LOCAL_OBJS) -lc -lm
+		$(CC) $(LDFLAGS) -o $@ $(OTHER_OBJS) $(LOCAL_OBJS) -lc -lm
 
 clean:
 		$(REMOVE) $(LOCAL_OBJS) $(CORE_OBJS) $(LIB_OBJS) $(TARGETS) $(DEPS) $(USER_LIB_OBJS) ${OBJDIR}

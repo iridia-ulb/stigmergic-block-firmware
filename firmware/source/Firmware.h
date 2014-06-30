@@ -6,7 +6,6 @@
 #include <avr/interrupt.h>
 
 /* Firmware Headers */
-//#include <Timer.h>
 #include <HardwareSerial.h>
 
 class Firmware {
