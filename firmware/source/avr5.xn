@@ -126,6 +126,7 @@ SECTIONS
     *(.text)
     . = ALIGN(2);
      *(.text.*)
+     *(.gnu.linkonce.t*)
     . = ALIGN(2);
     *(.fini9)  /* _exit() starts here.  */
     KEEP (*(.fini9))
@@ -170,6 +171,7 @@ SECTIONS
      PROVIDE (__bss_start = .) ;
     *(.bss)
      *(.bss*)
+     *(.gnu.linkonce.b*)
     *(COMMON)
      PROVIDE (__bss_end = .) ;
   }  > data
