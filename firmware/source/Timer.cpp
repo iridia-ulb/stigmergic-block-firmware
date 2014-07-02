@@ -1,6 +1,6 @@
 #include "Timer.h"
 
-#include <Microcontroller.h>
+//#include <Microcontroller.h>
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -61,15 +61,18 @@ ISR(TIMER0_OVF_vect)
 
 Timer::Timer() {
    /* Enable timer 0 */
-   sbi(TCCR0A, WGM01);
-   sbi(TCCR0A, WGM00);
+   //sbi(TCCR0A, WGM01);
+   //sbi(TCCR0A, WGM00);
+   TCCR0A |= (_BV(WGM00) | _BV(WGM01));
    
     /* Set prescaler to 64 */
-   sbi(TCCR0B, CS01);
-   sbi(TCCR0B, CS00);
+   //sbi(TCCR0B, CS01);
+   //sbi(TCCR0B, CS00);
+   TCCR0B |= (_BV(CS00) | _BV(CS01));
 
    /* Enable overflow interrupt */
-   sbi(TIMSK0, TOIE0);
+   //sbi(TIMSK0, TOIE0);
+   TIMSK0 |= _BV(TOIE0);
 }
 
 unsigned long Timer::millis()
@@ -109,6 +112,8 @@ void Timer::delay(unsigned long ms)
    }
 }
 
+#if 0 // comment out this method
+
 /* Delay for the given number of microseconds.  Assumes a 8 or 16 MHz clock. */
 void Timer::delayMicroseconds(unsigned int us)
 {
@@ -138,3 +143,4 @@ void Timer::delayMicroseconds(unsigned int us)
    );
 }
 
+#endif

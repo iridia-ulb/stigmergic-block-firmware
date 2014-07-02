@@ -19,11 +19,12 @@
   Modified 2012 by Todd Krein (todd@krein.org) to implement repeated starts
 */
 
+
 #ifndef TW_CONTROLLER_H
 #define TW_CONTROLLER_H
 
 #include <inttypes.h>
-#include "Stream.h"
+//#include "Stream.h"
 
 #define TW_BUFFER_LENGTH 32
 #define TW_SCL_FREQ 100000L
@@ -54,8 +55,8 @@ public:
    void BeginTransmission(uint8_t);
    uint8_t EndTransmission(bool b_send_stop = true);
 
-   virtual size_t Write(uint8_t un_data); // private? merge into method below
-   virtual size_t Write(const uint8_t* pun_data, size_t un_num_bytes); // b_send_stop
+   virtual uint8_t Write(uint8_t un_data); // private? merge into method below
+   virtual uint8_t Write(const uint8_t* pun_data, uint8_t un_num_bytes); // b_send_stop
 
    uint8_t Read(uint8_t un_address, uint8_t un_length, bool b_send_stop = true);
 

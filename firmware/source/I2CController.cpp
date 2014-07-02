@@ -23,7 +23,8 @@
 #include <string.h>
 #include <inttypes.h>
 #include <util/twi.h>
-
+#include <avr/io.h>
+#include <avr/interrupt.h>
 
 #include "I2CController.h"
 
@@ -383,7 +384,7 @@ uint8_t CTwoWireController::EndTransmission(bool b_send_stop) {
 // slave tx event callback
 // or after beginTransmission(address)
    
-size_t CTwoWireController::Write(uint8_t un_data) {
+uint8_t CTwoWireController::Write(uint8_t un_data) {
    if(m_unTxBufferLength >= TW_BUFFER_LENGTH) {
       //SetWriteError();
       return 0;
@@ -399,8 +400,8 @@ size_t CTwoWireController::Write(uint8_t un_data) {
 // must be called in:
 // slave tx event callback
 // or after beginTransmission(address)
-size_t CTwoWireController::Write(const uint8_t* pun_data, size_t un_quantity) {
-   for(size_t i = 0; i < un_quantity; ++i){
+uint8_t CTwoWireController::Write(const uint8_t* pun_data, uint8_t un_quantity) {
+   for(uint8_t i = 0; i < un_quantity; ++i){
       Write(pun_data[i]);
    }
    return un_quantity;

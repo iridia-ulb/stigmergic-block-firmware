@@ -55,7 +55,9 @@ ISR(USART_UDRE_vect)
 {
    if (tx_buffer.head == tx_buffer.tail) {
       // Buffer empty, so disable interrupts
-      cbi(UCSR0B, UDRIE0);
+
+      //cbi(UCSR0B, UDRIE0);
+      UCSR0B &= ~(_BV(UDRIE0));
    }
    else {
       // There is more data in the output buffer. Send the next byte
@@ -119,10 +121,13 @@ try_again:
 
   transmitting = false;
 
-  sbi(*_ucsrb, _rxen);
-  sbi(*_ucsrb, _txen);
-  sbi(*_ucsrb, _rxcie);
-  cbi(*_ucsrb, _udrie);
+  //sbi(*_ucsrb, _rxen);
+  //sbi(*_ucsrb, _txen);
+  //sbi(*_ucsrb, _rxcie);
+  *_ucsrb |= _BV(_rxen) | _BV(_txen) | _BV(_rxcie);
+
+  //cbi(*_ucsrb, _udrie);
+  *_ucsrb &= ~(_BV(_udrie));
 }
 
 /****************************************/
@@ -133,10 +138,12 @@ void HardwareSerial::end()
   // wait for transmission of outgoing data
   while (_tx_buffer->head != _tx_buffer->tail);
 
-  cbi(*_ucsrb, _rxen);
-  cbi(*_ucsrb, _txen);
-  cbi(*_ucsrb, _rxcie);  
-  cbi(*_ucsrb, _udrie);
+  //cbi(*_ucsrb, _rxen);
+  //cbi(*_ucsrb, _txen);
+  //cbi(*_ucsrb, _rxcie);  
+  //cbi(*_ucsrb, _udrie);
+
+  *_ucsrb &= ~(_BV(_rxen) | _BV(_txen) | _BV(_rxcie) | _BV(_udrie));
   
   // clear any received data
   _rx_buffer->head = _rx_buffer->tail;
@@ -190,30 +197,30 @@ void HardwareSerial::flush()
 /****************************************/
 /****************************************/
 
-size_t HardwareSerial::write(uint8_t c)
+uint8_t HardwareSerial::write(uint8_t c)
 {
   unsigned int i = (_tx_buffer->head + 1) % SERIAL_BUFFER_SIZE;
 	
   // If the output buffer is full, there's nothing for it other than to 
   // wait for the interrupt handler to empty it a bit
   // ???: return 0 here instead?
-  while (i == _tx_buffer->tail);
+  while (i == _tx_buffer->tail); // os sleep
 	
   _tx_buffer->buffer[_tx_buffer->head] = c;
   _tx_buffer->head = i;
-	
-  sbi(*_ucsrb, _udrie);
+
+  //sbi(*_ucsrb, _udrie);
+  *_ucsrb |= _BV(_udrie);
+
   // clear the TXC bit -- "can be cleared by writing a one to its bit location"
   transmitting = true;
-  sbi(*_ucsra, TXC0);
+
+  //sbi(*_ucsra, TXC0);
+  *_ucsra |= _BV(TXC0);
   
   return 1;
 }
 
 /****************************************/
 /****************************************/
-
-HardwareSerial::operator bool() {
-	return true;
-}
 

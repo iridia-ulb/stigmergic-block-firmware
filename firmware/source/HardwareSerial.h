@@ -25,12 +25,12 @@
 
 #include <inttypes.h>
 
-#include <Stream.h>
+//#include <Stream.h>
 #include <Timer.h>
 
 struct ring_buffer;
 
-class HardwareSerial : public Stream
+class HardwareSerial //: public Stream
 {
 private:
    ring_buffer *_rx_buffer;
@@ -60,13 +60,24 @@ public:
    virtual int peek(void);
    virtual int read(void);
    virtual void flush(void);
-   virtual size_t write(uint8_t);
-   inline size_t write(unsigned long n) { return write((uint8_t)n); }
-   inline size_t write(long n) { return write((uint8_t)n); }
-   inline size_t write(unsigned int n) { return write((uint8_t)n); }
-   inline size_t write(int n) { return write((uint8_t)n); }
-   using Print::write; // pull in write(str) and write(buf, size) from Print
-   operator bool();
+   
+
+   uint8_t write(const uint8_t* data, uint8_t count) {
+      for(uint8_t i = 0; i < count; i++) {
+         write(data[i]);
+      }
+      return count;
+   }
+
+   virtual uint8_t write(uint8_t);
+   //inline size_t write(unsigned long n) { return write((uint8_t)n); }
+   //inline size_t write(long n) { return write((uint8_t)n); }
+   //inline size_t write(unsigned int n) { return write((uint8_t)n); }
+   //inline size_t write(int n) { return write((uint8_t)n); }
+   //using Print::write; // pull in write(str) and write(buf, size) from Print
+   
+
+   //operator bool();
 
 private:
    

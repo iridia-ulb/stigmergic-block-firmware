@@ -26,21 +26,21 @@ public:
    int exec() {         
       for(;;) {
          if(HardwareSerial::instance().available()) {
-            HardwareSerial::instance().write("Hello world\r\n");
+            HardwareSerial::instance().write((const uint8_t*)"Hello world\r\n",13);
             while(HardwareSerial::instance().available()) {
                HardwareSerial::instance().read();
             }
          }
-         HardwareSerial::instance().write("Reading from MPU6050\r\n");
+         HardwareSerial::instance().write((const uint8_t*)"Reading from MPU6050\r\n",22);
          
          CTwoWireController::GetInstance().BeginTransmission(MPU6050_ADDR);
          CTwoWireController::GetInstance().Write(MPU6050_WHOAMI);
          CTwoWireController::GetInstance().EndTransmission(false);
          CTwoWireController::GetInstance().Read(MPU6050_ADDR, 1, true);
          m_unResult = CTwoWireController::GetInstance().Read();      
-         HardwareSerial::instance().write("MPU6050 returned: ");
+         HardwareSerial::instance().write((const uint8_t*)"MPU6050 returned: ",18);
          HardwareSerial::instance().write(m_unResult);
-         HardwareSerial::instance().write("\r\n");
+         HardwareSerial::instance().write((const uint8_t*)"\r\n",2);
          Timer::instance().delay(1000);
       }
       return 0;         
