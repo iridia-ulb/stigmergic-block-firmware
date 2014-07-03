@@ -5,10 +5,15 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+/* debug */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 /* Firmware Headers */
-#include <HardwareSerial.h>
-#include <I2CController.h>
-#include <Timer.h>
+#include <huart_controller.h>
+#include <tw_controller.h>
+#include <timer.h>
 
 /* I2C Address Space */
 #define MPU6050_ADDR 0x68
@@ -23,7 +28,9 @@ public:
       return _firmware;
    }
 
-   int exec() {         
+   int exec() {
+      char bufa[25] = {0};
+   
       for(;;) {
          if(HardwareSerial::instance().available()) {
             HardwareSerial::instance().write((const uint8_t*)"Hello world\r\n",13);
@@ -41,7 +48,14 @@ public:
          HardwareSerial::instance().write((const uint8_t*)"MPU6050 returned: ",18);
          HardwareSerial::instance().write(m_unResult);
          HardwareSerial::instance().write((const uint8_t*)"\r\n",2);
-         Timer::instance().delay(1000);
+
+         // Read timer values
+         sprintf(bufa, "ms = %lu\r\n", cTimer.GetMilliseconds());
+         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
+
+         cTimer.Delay(1000);
+         
+
       }
       return 0;         
    }
@@ -49,8 +63,10 @@ public:
 private:
 
    uint8_t m_unResult;
-  
+
+   /* private constructor */
    Firmware() {
+
       // Enable interrupts
       sei();
 
@@ -59,6 +75,8 @@ private:
       PORTC &= ~PORT_CTRL_MASK;
       PORTC |= 1 & PORT_CTRL_MASK;
    }
+
+   CTimer cTimer;
 
    static Firmware _firmware;
 };

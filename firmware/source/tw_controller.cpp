@@ -26,7 +26,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include "I2CController.h"
+#include "tw_controller.h"
 
 // Preinstantiate Objects //////////////////////////////////////////////////////
 

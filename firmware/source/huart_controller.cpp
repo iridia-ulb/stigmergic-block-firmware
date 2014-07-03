@@ -6,7 +6,7 @@
 #include <inttypes.h>
 #include <avr/interrupt.h>
 
-#include "HardwareSerial.h"
+#include "huart_controller.h"
 
 // Singleton Instance /////////////////////////////////////////////////////////////////////////
 HardwareSerial HardwareSerial::_hardware_serial;

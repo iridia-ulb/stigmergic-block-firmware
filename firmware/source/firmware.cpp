@@ -1,4 +1,4 @@
-#include "Firmware.h"
+#include "firmware.h"
 
 /* initialisation of the static singleton */
 Firmware Firmware::_firmware;
