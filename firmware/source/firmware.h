@@ -50,10 +50,10 @@ public:
          HardwareSerial::instance().write((const uint8_t*)"\r\n",2);
 
          // Read timer values
-         sprintf(bufa, "ms = %lu\r\n", cTimer.GetMilliseconds());
+         sprintf(bufa, "ms = %lu\r\n", m_cTimer.GetMilliseconds());
          HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
 
-         cTimer.Delay(1000);
+         m_cTimer.Delay(1000);
          
 
       }
@@ -65,7 +65,20 @@ private:
    uint8_t m_unResult;
 
    /* private constructor */
-   Firmware() {
+   Firmware() :
+      m_cTimer(TCCR0A,
+               TCCR0A | (_BV(WGM00) | _BV(WGM01)),
+               TCCR0B,
+               TCCR0B | (_BV(CS00) | _BV(CS01)),
+               TIMSK0,
+               TIMSK0 | _BV(TOIE0),
+               TIFR0,
+               TCNT0,
+               TIMER0_OVF_vect_num) {
+      //m_cHUARTController(...)
+      //m_cTUARTController(...)
+      //m_cTWController(...)
+
 
       // Enable interrupts
       sei();
@@ -76,7 +89,11 @@ private:
       PORTC |= 1 & PORT_CTRL_MASK;
    }
 
-   CTimer cTimer;
+
+   
+
+
+   CTimer m_cTimer;
 
    static Firmware _firmware;
 };
