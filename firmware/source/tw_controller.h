@@ -37,7 +37,7 @@
 
 #define TW_BUS_NO_ERROR 0xFF
 
-class CTwoWireController //: public Stream
+class CTWController //: public Stream
 {
 private:
    uint8_t m_punRxBuffer[TW_BUFFER_LENGTH];
@@ -67,15 +67,15 @@ public:
   
    //using Print::Write;
 
-   static CTwoWireController& GetInstance() {
-      return m_cTwoWireController;
+   static CTWController& GetInstance() {
+      return m_cTWController;
    }
 
 private:
 
-   CTwoWireController();
+   CTWController();
 
-   static CTwoWireController m_cTwoWireController;
+   static CTWController m_cTWController;
 };
 
 #endif

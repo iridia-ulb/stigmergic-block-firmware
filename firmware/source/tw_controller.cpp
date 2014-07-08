@@ -1,5 +1,5 @@
 /*
-  TwoWire.cpp - TWI/I2C library for Wiring & Arduino
+  TW.cpp - TWI/I2C library for Wiring & Arduino
   Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
 
   This library is free software; you can redistribute it and/or
@@ -30,20 +30,20 @@
 
 // Preinstantiate Objects //////////////////////////////////////////////////////
 
-CTwoWireController CTwoWireController::m_cTwoWireController;
+CTWController CTWController::m_cTWController;
 
 // Initialize Class Variables //////////////////////////////////////////////////
 
-//uint8_t CTwoWireController::m_unRxBuffer[TW_BUFFER_LENGTH];
-//uint8_t CTwoWireController::m_unRxBufferIndex = 0;
-//uint8_t CTwoWireController::m_unRxBufferLength = 0;
+//uint8_t CTWController::m_unRxBuffer[TW_BUFFER_LENGTH];
+//uint8_t CTWController::m_unRxBufferIndex = 0;
+//uint8_t CTWController::m_unRxBufferLength = 0;
 
-//uint8_t CTwoWireController::m_unTxAddress = 0;
-//uint8_t CTwoWireController::m_unTxBuffer[TW_BUFFER_LENGTH];
-//uint8_t CTwoWireController::m_unTxBufferIndex = 0;
-//uint8_t CTwoWireController::m_unTxBufferLength = 0;
+//uint8_t CTWController::m_unTxAddress = 0;
+//uint8_t CTWController::m_unTxBuffer[TW_BUFFER_LENGTH];
+//uint8_t CTWController::m_unTxBufferIndex = 0;
+//uint8_t CTWController::m_unTxBufferLength = 0;
 
-//uint8_t CTwoWireController::m_bTransmitting = false;
+//uint8_t CTWController::m_bTransmitting = false;
 
 // Interrupt Variables //////////////////////////////////////////////////
 
@@ -183,7 +183,7 @@ ISR(TWI_vect)
 
 // Constructors ////////////////////////////////////////////////////////////////
 
-CTwoWireController::CTwoWireController()
+CTWController::CTWController()
 {
   m_unRxBufferIndex = 0;
   m_unRxBufferLength = 0;
@@ -217,7 +217,7 @@ CTwoWireController::CTwoWireController()
 
 // Public Methods //////////////////////////////////////////////////////////////
 
-uint8_t CTwoWireController::Read(uint8_t un_address, uint8_t un_length, bool b_send_stop)
+uint8_t CTWController::Read(uint8_t un_address, uint8_t un_length, bool b_send_stop)
 {
   // clamp to buffer length
   if(un_length > TW_BUFFER_LENGTH) {
@@ -281,7 +281,7 @@ uint8_t CTwoWireController::Read(uint8_t un_address, uint8_t un_length, bool b_s
 }
 
 
-void CTwoWireController::BeginTransmission(uint8_t un_tx_address) {
+void CTWController::BeginTransmission(uint8_t un_tx_address) {
   // indicate that we are transmitting
   m_bTransmitting = true;
   // set address of targeted slave
@@ -304,7 +304,7 @@ void CTwoWireController::BeginTransmission(uint8_t un_tx_address) {
 //	no call to endTransmission(true) is made. Some I2C
 //	devices will behave oddly if they do not see a STOP.
 //
-uint8_t CTwoWireController::EndTransmission(bool b_send_stop) {
+uint8_t CTWController::EndTransmission(bool b_send_stop) {
    // transmit buffer (blocking)
    //int8_t ret = twi_writeTo(txAddress, txBuffer, txBufferLength, 1, b_send_stop);
    // uint8_t address, uint8_t* data, uint8_t length, uint8_t wait, uint8_t sendStop
@@ -384,7 +384,7 @@ uint8_t CTwoWireController::EndTransmission(bool b_send_stop) {
 // slave tx event callback
 // or after beginTransmission(address)
    
-uint8_t CTwoWireController::Write(uint8_t un_data) {
+uint8_t CTWController::Write(uint8_t un_data) {
    if(m_unTxBufferLength >= TW_BUFFER_LENGTH) {
       //SetWriteError();
       return 0;
@@ -400,7 +400,7 @@ uint8_t CTwoWireController::Write(uint8_t un_data) {
 // must be called in:
 // slave tx event callback
 // or after beginTransmission(address)
-uint8_t CTwoWireController::Write(const uint8_t* pun_data, uint8_t un_quantity) {
+uint8_t CTWController::Write(const uint8_t* pun_data, uint8_t un_quantity) {
    for(uint8_t i = 0; i < un_quantity; ++i){
       Write(pun_data[i]);
    }
@@ -410,14 +410,14 @@ uint8_t CTwoWireController::Write(const uint8_t* pun_data, uint8_t un_quantity) 
 // must be called in:
 // slave rx event callback
 // or after requestFrom(address, numBytes)
-bool CTwoWireController::Available() {
+bool CTWController::Available() {
    return (m_unRxBufferLength - m_unRxBufferIndex > 0);
 }
 
 // must be called in:
 // slave rx event callback
 // or after requestFrom(address, numBytes)
-uint8_t CTwoWireController::Read() {
+uint8_t CTWController::Read() {
   uint8_t un_value = -1;
   
   // get each successive byte on each call
@@ -431,7 +431,7 @@ uint8_t CTwoWireController::Read() {
 // must be called in:
 // slave rx event callback
 // or after requestFrom(address, numBytes)
-uint8_t CTwoWireController::Peek(void) {
+uint8_t CTWController::Peek(void) {
   uint8_t un_value = -1;
   
   if(m_unRxBufferIndex < m_unRxBufferLength) {
@@ -441,7 +441,7 @@ uint8_t CTwoWireController::Peek(void) {
   return un_value;
 }
 
-void CTwoWireController::Flush(void)
+void CTWController::Flush(void)
 {
   // XXX: to be implemented.
 }

@@ -79,6 +79,19 @@ private:
       //m_cTUARTController(...)
       //m_cTWController(...)
 
+      m_cTUARTController(9600,
+                         TCCR1A,
+                         TCCR1B,
+                         TIMSK1,
+                         TIFR1,
+                         ICR1,
+                         OCR1A,
+                         OCR1B,
+                         TCNT1,
+                         TIMER1_CAPT_vect,
+                         TIMER1_COMPA_vect,
+                         TIMER1_COMPB_vect)     
+                                    
 
       // Enable interrupts
       sei();
