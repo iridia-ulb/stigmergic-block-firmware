@@ -43,7 +43,7 @@ public:
             sprintf(bufa, "uptime = %lu\r\n", m_cTimer.GetMilliseconds());
             HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
 
-            HardwareSerial::instance().write((const uint8_t*)"TUART = [", 9);
+            HardwareSerial::instance().write((const uint8_t*)"TUART = [ ", 10);
             while( m_cTUARTController.Available()) {
                m_cTimer.Delay(1);
                sprintf(bufa, "0x%02x ", m_cTUARTController.Read());

@@ -64,7 +64,7 @@ CTUARTController::COutputCompareBInterrupt::COutputCompareBInterrupt(CTUARTContr
 void CTUARTController::CInputCaptureInterrupt::ServiceRoutine() {
    uint8_t state, bit, head;
    uint16_t capture, target;
-   int16_t offset;
+   //int16_t offset;
 
 
 
@@ -122,7 +122,8 @@ void CTUARTController::CInputCaptureInterrupt::ServiceRoutine() {
       target = m_pcTUARTController->m_unRxTarget;
       while (1) {
          //offset = capture - target;
-         if (int32_t(capture) - target < 0) break;
+         //if (int32_t(capture) - target < 0) break;
+         if (int16_t(capture - target) < 0) break;
          m_pcTUARTController->m_unRxByte = (m_pcTUARTController->m_unRxByte >> 1) | m_pcTUARTController->m_unRxBit;
 
          target += m_pcTUARTController->m_unTicksPerBit;
