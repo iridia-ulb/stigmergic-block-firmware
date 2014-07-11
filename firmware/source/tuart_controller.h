@@ -3,13 +3,25 @@
 #define TUART_CONTROLLER_H
 
 #include <inttypes.h>
+#include <interrupt.h>
 
 #define IO_BUFFER_SIZE 64
 
 class CTUARTController //: public Stream
 {
 public:
-   CTUARTController();
+   CTUARTController(uint32_t un_baud_rate,
+                    volatile uint8_t& un_ctrl_reg_a,
+                    volatile uint8_t& un_ctrl_reg_b,
+                    volatile uint8_t& un_intr_mask_reg,
+                    volatile uint8_t& un_intr_flag_reg,
+                    volatile uint16_t& un_input_capt_reg,
+                    volatile uint16_t& un_output_comp_reg_a,
+                    volatile uint16_t& un_output_comp_reg_b,
+                    volatile uint16_t& un_cnt_reg,
+                    uint8_t un_input_capt_intr_num,
+                    uint8_t un_output_comp_a_intr_num,
+                    uint8_t un_output_comp_b_intr_num);
    ~CTUARTController();
 
    void WriteByte(uint8_t byte);
@@ -22,17 +34,17 @@ public:
    void FlushInput();
    void FlushOutput();
 
-private:
+public:
 
    /* Registers */   	
    volatile uint8_t& m_unControlRegisterA;
    volatile uint8_t& m_unControlRegisterB;
    volatile uint8_t& m_unInterruptMaskRegister;
    volatile uint8_t& m_unInterruptFlagRegister;
-   volatile uint8_t& m_unInputCaptureRegister;
-   volatile uint8_t& m_unOutputCompareRegisterA;
-   volatile uint8_t& m_unOutputCompareRegisterB;
-   volatile uint8_t& m_unCountRegister;
+   volatile uint16_t& m_unInputCaptureRegister;
+   volatile uint16_t& m_unOutputCompareRegisterA;
+   volatile uint16_t& m_unOutputCompareRegisterB;
+   volatile uint16_t& m_unCountRegister;
 
    volatile uint8_t  m_unRxState;
    volatile uint8_t  m_unTxState;
@@ -44,6 +56,38 @@ private:
    uint8_t           m_unRxByte;
    uint8_t           m_unTxBit;
    uint8_t           m_unRxBit;
+
+   /* DEBUG */
+
+   /*
+   bool InterruptOCAOccured;
+   bool InterruptOCBOccured;
+   bool InterruptICOccured;
+   bool EnabledOCBInterrupt;
+   bool FlagA;
+   bool FlagB;
+   bool FlagC;
+   */
+
+   uint16_t DetectedEdges;
+   //uint16_t CaptureTimes[200];
+   //uint8_t  TrackRxBit[90];
+   //uint8_t  TrackRxByte[90];
+   //uint8_t  StateTotal;
+
+   /*
+
+   struct Event {
+      uint8_t EdgeIndex;
+      uint16_t CaptureTime;
+      uint8_t RxState;
+      uint8_t RxByte;
+      uint8_t RxBit;
+   } Samples[40];
+
+   */ 
+
+   /* DEBUG */
 
    /* IO Buffers */
    volatile struct SRingBuffer {

@@ -1,0 +1,117 @@
+RxState = 0, RxByte = D, RxBuffer.Head = 7, RxBuffer.Tail = 7, DetectedEdges = 456
+sending '+++'
+TxBuffer.Head = 10, TxBuffer.Tail = 8
+RxState = 0, RxByte = D, RxBuffer.Head = 7, RxBuffer.Tail = 7, DetectedEdges = 456
+sending '+++'
+TxBuffer.Head = 12, TxBuffer.Tail = 10
+Hello world
+sending '+++'
+TxBuffer.Head = 2, TxBuffer.Tail = 0
+RxState = 0, RxByte = 0, RxBuffer.Head = 0, RxBuffer.Tail = 0, DetectedEdges = 0
+sending '+++'
+TxBuffer.Head = 4, TxBuffer.Tail = 2
+RxState = 0, RxByte = 0, RxBuffer.Head = 0, RxBuffer.Tail = 0, DetectedEdges = 0
+sending '+++'
+TxBuffer.Head = 6, TxBuffer.Tail = 4
+RxState = 0, RxByte = D, RxBuffer.Head = 3, RxBuffer.Tail = 0, DetectedEdges = 20
+uptime = 15017
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 8, TxBuffer.Tail = 6
+RxState = 0, RxByte = D, RxBuffer.Head = 3, RxBuffer.Tail = 3, DetectedEdges = 20
+sending '+++'
+TxBuffer.Head = 10, TxBuffer.Tail = 8
+RxState = 0, RxByte = D, RxBuffer.Head = 3, RxBuffer.Tail = 3, DetectedEdges = 20
+sending '+++'
+TxBuffer.Head = 12, TxBuffer.Tail = 10
+RxState = 0, RxByte = D, RxBuffer.Head = 6, RxBuffer.Tail = 3, DetectedEdges = 40
+uptime = 30046
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 14, TxBuffer.Tail = 12
+RxState = 0, RxByte = D, RxBuffer.Head = 6, RxBuffer.Tail = 6, DetectedEdges = 40
+sending '+++'
+TxBuffer.Head = 16, TxBuffer.Tail = 14
+RxState = 0, RxByte = D, RxBuffer.Head = 6, RxBuffer.Tail = 6, DetectedEdges = 40
+sending '+++'
+TxBuffer.Head = 18, TxBuffer.Tail = 16
+RxState = 0, RxByte = F8, RxBuffer.Head = 10, RxBuffer.Tail = 6, DetectedEdges = 60
+uptime = 45076
+TUART = [0x00 0x6a 0xaa 0xf8 ]
+sending '+++'
+TxBuffer.Head = 20, TxBuffer.Tail = 18
+RxState = 0, RxByte = F8, RxBuffer.Head = 10, RxBuffer.Tail = 10, DetectedEdges = 60
+sending '+++'
+TxBuffer.Head = 22, TxBuffer.Tail = 20
+RxState = 0, RxByte = F8, RxBuffer.Head = 10, RxBuffer.Tail = 10, DetectedEdges = 60
+sending '+++'
+TxBuffer.Head = 24, TxBuffer.Tail = 22
+RxState = 0, RxByte = D, RxBuffer.Head = 13, RxBuffer.Tail = 10, DetectedEdges = 80
+uptime = 60106
+TUART = [0x4f 0xff 0x0d ]
+sending '+++'
+TxBuffer.Head = 26, TxBuffer.Tail = 24
+RxState = 0, RxByte = D, RxBuffer.Head = 13, RxBuffer.Tail = 13, DetectedEdges = 80
+sending '+++'
+TxBuffer.Head = 28, TxBuffer.Tail = 26
+RxState = 0, RxByte = D, RxBuffer.Head = 13, RxBuffer.Tail = 13, DetectedEdges = 80
+sending '+++'
+TxBuffer.Head = 30, TxBuffer.Tail = 28
+RxState = 0, RxByte = D, RxBuffer.Head = 16, RxBuffer.Tail = 13, DetectedEdges = 100
+uptime = 75137
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 32, TxBuffer.Tail = 30
+RxState = 0, RxByte = D, RxBuffer.Head = 16, RxBuffer.Tail = 16, DetectedEdges = 100
+sending '+++'
+TxBuffer.Head = 34, TxBuffer.Tail = 32
+RxState = 0, RxByte = D, RxBuffer.Head = 16, RxBuffer.Tail = 16, DetectedEdges = 100
+sending '+++'
+TxBuffer.Head = 36, TxBuffer.Tail = 34
+RxState = 0, RxByte = D, RxBuffer.Head = 19, RxBuffer.Tail = 16, DetectedEdges = 120
+uptime = 90165
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 38, TxBuffer.Tail = 36
+RxState = 0, RxByte = D, RxBuffer.Head = 19, RxBuffer.Tail = 19, DetectedEdges = 120
+sending '+++'
+TxBuffer.Head = 40, TxBuffer.Tail = 38
+RxState = 0, RxByte = D, RxBuffer.Head = 19, RxBuffer.Tail = 19, DetectedEdges = 120
+sending '+++'
+TxBuffer.Head = 42, TxBuffer.Tail = 40
+RxState = 0, RxByte = 35, RxBuffer.Head = 22, RxBuffer.Tail = 19, DetectedEdges = 138
+uptime = 105195
+TUART = [0xff 0x2d 0x35 ]
+sending '+++'
+TxBuffer.Head = 44, TxBuffer.Tail = 42
+RxState = 0, RxByte = 35, RxBuffer.Head = 22, RxBuffer.Tail = 22, DetectedEdges = 138
+sending '+++'
+TxBuffer.Head = 46, TxBuffer.Tail = 44
+RxState = 0, RxByte = 35, RxBuffer.Head = 22, RxBuffer.Tail = 22, DetectedEdges = 138
+sending '+++'
+TxBuffer.Head = 48, TxBuffer.Tail = 46
+RxState = 0, RxByte = D, RxBuffer.Head = 25, RxBuffer.Tail = 22, DetectedEdges = 158
+uptime = 120225
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 50, TxBuffer.Tail = 48
+RxState = 0, RxByte = D, RxBuffer.Head = 25, RxBuffer.Tail = 25, DetectedEdges = 158
+sending '+++'
+TxBuffer.Head = 52, TxBuffer.Tail = 50
+RxState = 0, RxByte = D, RxBuffer.Head = 25, RxBuffer.Tail = 25, DetectedEdges = 158
+sending '+++'
+TxBuffer.Head = 54, TxBuffer.Tail = 52
+RxState = 0, RxByte = D, RxBuffer.Head = 28, RxBuffer.Tail = 25, DetectedEdges = 178
+uptime = 135256
+TUART = [0x4f 0x4b 0x0d ]
+sending '+++'
+TxBuffer.Head = 56, TxBuffer.Tail = 54
+RxState = 0, RxByte = D, RxBuffer.Head = 28, RxBuffer.Tail = 28, DetectedEdges = 178
+sending '+++'
+TxBuffer.Head = 58, TxBuffer.Tail = 56
+RxState = 0, RxByte = D, RxBuffer.Head = 28, RxBuffer.Tail = 28, DetectedEdges = 178
+sending '+++'
+TxBuffer.Head = 60, TxBuffer.Tail = 58
+RxState = 0, RxByte = D, RxBuffer.Head = 31, RxBuffer.Tail = 28, DetectedEdges = 198
+uptime = 150286
+TUART = [0x4f 0x4b 0x0d ]
