@@ -17,8 +17,22 @@
 #include <timer.h>
 
 /* I2C Address Space */
-#define MPU6050_ADDR 0x68
-#define MPU6050_WHOAMI 0x75
+#define MPU6050_ADDR               0x68
+
+/* MPU6050 Registers */
+#define MPU6050_WHOAMI             0x75
+#define MPU6050_PWR_MGMT_1         0x6B // R/W
+#define MPU6050_PWR_MGMT_2         0x6C // R/W
+
+#define MPU6050_ACCEL_XOUT_H       0x3B // R  
+#define MPU6050_ACCEL_XOUT_L       0x3C // R  
+#define MPU6050_ACCEL_YOUT_H       0x3D // R  
+#define MPU6050_ACCEL_YOUT_L       0x3E // R  
+#define MPU6050_ACCEL_ZOUT_H       0x3F // R  
+#define MPU6050_ACCEL_ZOUT_L       0x40 // R  
+
+#define MPU6050_TEMP_OUT_H         0x41 // R  
+#define MPU6050_TEMP_OUT_L         0x42 // R  
 
 #define PORT_CTRL_MASK 0x0F
 
@@ -35,14 +49,14 @@ public:
 
       uint8_t unXbeeCmdIdx = 0;
 
-      enum class EConfigState {
-         CONFIG_TX,
-            CONFIG_WAIT_FOR_RX,
-            CONN_ESTABLISHED
-      } eConfigState = EConfigState::CONFIG_TX;
-      
-      // EConfigState eConfigState = EConfigState::CONFIG_TX;
-
+      enum class ETestbenchState {
+         XBEE_INIT_TX,
+         XBEE_INIT_WAIT_FOR_RX,
+         MPU6050_INIT,
+         TESTBENCH_INIT_DONE,
+         TESTBENCH_INIT_FAIL
+      } eTestbenchState = ETestbenchState::XBEE_INIT_TX;
+ 
       struct SRxBuffer {
          uint8_t Buffer[8];
          uint8_t Index;
@@ -58,8 +72,8 @@ public:
 
       for(;;) {
          
-         switch(eConfigState) {
-         case EConfigState::CONFIG_TX: 
+         switch(eTestbenchState) {
+         case ETestbenchState::XBEE_INIT_TX: 
             /* DEBUG */
             sprintf(buffer, "Sending command: ");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
@@ -78,12 +92,12 @@ public:
             sprintf(buffer, "\r\n");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
             /* DEBUG */
-            eConfigState = EConfigState::CONFIG_WAIT_FOR_RX;
+            eTestbenchState = ETestbenchState::XBEE_INIT_WAIT_FOR_RX;
             sRxBuffer.Index = 0;
             continue;
             break;
-         case EConfigState::CONFIG_WAIT_FOR_RX:
-            m_cTimer.Delay(1000);
+         case ETestbenchState::XBEE_INIT_WAIT_FOR_RX:
+            m_cTimer.Delay(10);
             while(m_cTUARTController.Available()) {
                sRxBuffer.Buffer[sRxBuffer.Index++] = m_cTUARTController.Read();
             }
@@ -103,13 +117,13 @@ public:
                if(unXbeeCmdIdx < 5) {
                   /* send next AT command */
                   unXbeeCmdIdx++;
-                  eConfigState = EConfigState::CONFIG_TX;
+                  eTestbenchState = ETestbenchState::XBEE_INIT_TX;
                }
                else {
-                  /* all commands sent, enter connection established mode */
-                  eConfigState = EConfigState::CONN_ESTABLISHED;
+                  /* XBEE configured successfully, configure MPU6050 */
+                  eTestbenchState = ETestbenchState::MPU6050_INIT;
                   /* DEBUG */
-                  sprintf(buffer, "Connection Established\r\n");
+                  sprintf(buffer, "Xbee Configured\r\n");
                   HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
                   /* DEBUG */
                }
@@ -117,60 +131,96 @@ public:
             // else if -- condition to catch no Xbee present would go here
             continue;
             break;
-         case EConfigState::CONN_ESTABLISHED:
+         case ETestbenchState::MPU6050_INIT:
             m_cTimer.Delay(10);
+            /*
             while(m_cTUARTController.Available()) {
                HardwareSerial::instance().write(m_cTUARTController.Read());
             }
             while(HardwareSerial::instance().available()) {
                m_cTUARTController.WriteByte(HardwareSerial::instance().read());
             }
+            */
+            sprintf(buffer, "Checking MPU6050 Address (WA)\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+
+
+            CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
+            CTWController::GetInstance().Write(MPU6050_WHOAMI);
+
+            CTWController::GetInstance().EndTransmission(false);
+
+            sprintf(buffer, "Checking MPU6050 Address (RD)\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+
+            CTWController::GetInstance().Read(MPU6050_ADDR, 1, true);
+
             
-#if 0            
-            m_cTimer.Delay(500);
-            /* DEBUG */
-            //sprintf(buffer, "Waiting for RX\r\n");
-            //HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
-            /* DEBUG */
-            bool bHasData = m_cTUARTController.Available();
-            if(bHasData) {
-               /* DEBUG */
-               //sprintf(buffer, "Got RX: Reading\r\n");
-               //HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
-               /* DEBUG */
-               do {
-                  m_cTUARTController.Read();
-               }
-               while(bHasData = m_cTUARTController.Available());
-               sprintf(buffer, "Got RX: Writing\r\n");
+            /* Check if the WHOAMI register contains the MPU6050 address value  */
+            if(CTWController::GetInstance().Read() == MPU6050_ADDR) {
+               sprintf(buffer, "Found MPU6050 Sensor at 0x68!\r\n");
                HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
-               m_cTUARTController.WriteByte('B');
-               m_cTUARTController.WriteByte('L');
-               m_cTUARTController.WriteByte('O');
-               m_cTUARTController.WriteByte('C');
-               m_cTUARTController.WriteByte('K');
-               m_cTUARTController.WriteByte(' ');
-               m_cTUARTController.WriteByte('O');
-               m_cTUARTController.WriteByte('S');
-               m_cTUARTController.WriteByte('\r');
-               m_cTUARTController.WriteByte('\n');
             }
-#endif
+            else {
+               eTestbenchState = ETestbenchState::TESTBENCH_INIT_FAIL;
+               sprintf(buffer, "Hardware failure! Unexpected response from TWController / MPU6050\r\n");
+               HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+               continue;
+            }
+            
+            /* select internal clock, disable sleep/cycle mode, enable temperature sensor*/
+
+            CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
+            sprintf(buffer, "Updating Power Management (WA)\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            CTWController::GetInstance().Write(MPU6050_PWR_MGMT_1);
+            sprintf(buffer, "Updating Power Management (WD)\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            CTWController::GetInstance().Write(0x00);
+            CTWController::GetInstance().EndTransmission(true);
+            
+            eTestbenchState = ETestbenchState::TESTBENCH_INIT_DONE;
+            sprintf(buffer, "Testbench Initialised - Press any key on WiFi connection to sample MPU6050\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
             continue;
             break;
-         }
-         /*
-         
-         m_cTimer.Delay(2000);
-         sprintf(bufa, "RxState = %u, RxByte = %X, RxBuffer.Head = %u, RxBuffer.Tail = %u, DetectedEdges = %u\r\n", 
-                 m_cTUARTController.m_unRxState, 
-                 m_cTUARTController.m_unRxByte, 
-                 m_cTUARTController.m_sRxBuffer.Head,
-                 m_cTUARTController.m_sRxBuffer.Tail,
-                 m_cTUARTController.DetectedEdges);
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         */
-      }
+         case ETestbenchState::TESTBENCH_INIT_DONE:
+            m_cTimer.Delay(500);
+            if(m_cTUARTController.Available()) {
+               while(m_cTUARTController.Available()) m_cTUARTController.Read();
+               /* Sample sensor */
+               CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
+               CTWController::GetInstance().Write(MPU6050_ACCEL_XOUT_H);
+               CTWController::GetInstance().EndTransmission(false);
+               CTWController::GetInstance().Read(MPU6050_ADDR, 8, true);
+               /* Read the requested 8 bytes */
+               uint8_t punRes[8];
+               for(uint8_t i = 0; i < 8; i++) {
+                  punRes[i] = CTWController::GetInstance().Read();
+               }          
+               sprintf(buffer, 
+                       "Acc[x] = %i\r\n"
+                       "Acc[y] = %i\r\n"
+                       "Acc[z] = %i\r\n"
+                       "Temp = %i\r\n",
+                       int16_t((punRes[0] << 8) | punRes[1]),
+                       int16_t((punRes[2] << 8) | punRes[3]),
+                       int16_t((punRes[4] << 8) | punRes[5]),
+                       (int16_t((punRes[6] << 8) | punRes[7]) + 12412) / 340);
+               for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+                  m_cTUARTController.WriteByte(buffer[i]);
+               }
+            }
+            continue;
+            break;
+         case ETestbenchState::TESTBENCH_INIT_FAIL:
+            m_cTimer.Delay(5000);
+            printf(buffer, "Testbench Initisation Failed - Check connections and reboot\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            continue;
+            break;
+         } // switch(eTestbenchState)
+      } // for(;;)
       return 0;         
    }
       
@@ -211,9 +261,9 @@ private:
       sei();
 
       // select channel 2 for i2c output
-      //DDRC |= PORT_CTRL_MASK;
-      //PORTC &= ~PORT_CTRL_MASK;
-      //PORTC |= 1 & PORT_CTRL_MASK;
+      DDRC |= PORT_CTRL_MASK;
+      PORTC &= ~PORT_CTRL_MASK;
+      PORTC |= 1 & PORT_CTRL_MASK;
    }
 
    
