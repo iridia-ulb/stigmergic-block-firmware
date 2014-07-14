@@ -30,82 +30,136 @@ public:
    }
 
    int exec() {
-      char bufa[200] = {0};
-      HardwareSerial::instance().write((const uint8_t*)"Hello world\r\n",13);
+      char buffer[200] = {0};
+      HardwareSerial::instance().write((const uint8_t*)"Smartblock MCU Online\r\n",23);
+
+      uint8_t unXbeeCmdIdx = 0;
+
+      enum class EConfigState {
+         CONFIG_TX,
+            CONFIG_WAIT_FOR_RX,
+            CONN_ESTABLISHED
+      } eConfigState = EConfigState::CONFIG_TX;
+      
+      // EConfigState eConfigState = EConfigState::CONFIG_TX;
+
+      struct SRxBuffer {
+         uint8_t Buffer[8];
+         uint8_t Index;
+      } sRxBuffer = {{}, 0};
+
+      const uint8_t *ppunXbeeConfig[] = {
+         (const uint8_t*)"+++",
+         (const uint8_t*)"ATRE\r\n",
+         (const uint8_t*)"ATID 2001\r\n",
+         (const uint8_t*)"ATDH 0013A200\r\n",
+         (const uint8_t*)"ATDL 40AA1A2C\r\n",
+         (const uint8_t*)"ATCN\r\n"};
 
       for(;;) {
          
-         while(HardwareSerial::instance().available()) {
-            m_cTUARTController.WriteByte(HardwareSerial::instance().read());
-         }
-
-         if(m_cTUARTController.Available()) {
-            sprintf(bufa, "uptime = %lu\r\n", m_cTimer.GetMilliseconds());
-            HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-
-            HardwareSerial::instance().write((const uint8_t*)"TUART = [ ", 10);
-            while( m_cTUARTController.Available()) {
-               m_cTimer.Delay(1);
-               sprintf(bufa, "0x%02x ", m_cTUARTController.Read());
-               HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
+         switch(eConfigState) {
+         case EConfigState::CONFIG_TX: 
+            /* DEBUG */
+            sprintf(buffer, "Sending command: ");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            /* DEBUG */
+            for(uint8_t unCmdCharIdx = 0; 
+                ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\0'; 
+                unCmdCharIdx++) {
+               m_cTUARTController.WriteByte(ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx]);
+               /* DEBUG */
+               if(ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\n' and
+                  ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\r')
+                  HardwareSerial::instance().write(ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx]);
+               /* DEBUG */
             }
-            HardwareSerial::instance().write((const uint8_t*)"]\r\n", 3);
+            /* DEBUG */
+            sprintf(buffer, "\r\n");
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            /* DEBUG */
+            eConfigState = EConfigState::CONFIG_WAIT_FOR_RX;
+            sRxBuffer.Index = 0;
+            continue;
+            break;
+         case EConfigState::CONFIG_WAIT_FOR_RX:
+            m_cTimer.Delay(1000);
+            while(m_cTUARTController.Available()) {
+               sRxBuffer.Buffer[sRxBuffer.Index++] = m_cTUARTController.Read();
+            }
+            /* DEBUG */
+            sprintf(buffer, "Waiting for RX, buffer contains (%u): %s\r\n", sRxBuffer.Index, (const char*)sRxBuffer.Buffer);
+            HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            /* DEBUG */
+
+            if(sRxBuffer.Index > 2 &&
+               sRxBuffer.Buffer[0] == 'O' &&
+               sRxBuffer.Buffer[1] == 'K' &&
+               sRxBuffer.Buffer[2] == '\r') {
+               /* DEBUG */
+               sprintf(buffer, "Got OK\r\n");
+               HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+               /* DEBUG */
+               if(unXbeeCmdIdx < 5) {
+                  /* send next AT command */
+                  unXbeeCmdIdx++;
+                  eConfigState = EConfigState::CONFIG_TX;
+               }
+               else {
+                  /* all commands sent, enter connection established mode */
+                  eConfigState = EConfigState::CONN_ESTABLISHED;
+                  /* DEBUG */
+                  sprintf(buffer, "Connection Established\r\n");
+                  HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+                  /* DEBUG */
+               }
+            }
+            // else if -- condition to catch no Xbee present would go here
+            continue;
+            break;
+         case EConfigState::CONN_ESTABLISHED:
+            m_cTimer.Delay(10);
+            while(m_cTUARTController.Available()) {
+               HardwareSerial::instance().write(m_cTUARTController.Read());
+            }
+            while(HardwareSerial::instance().available()) {
+               m_cTUARTController.WriteByte(HardwareSerial::instance().read());
+            }
+            
+#if 0            
+            m_cTimer.Delay(500);
+            /* DEBUG */
+            //sprintf(buffer, "Waiting for RX\r\n");
+            //HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+            /* DEBUG */
+            bool bHasData = m_cTUARTController.Available();
+            if(bHasData) {
+               /* DEBUG */
+               //sprintf(buffer, "Got RX: Reading\r\n");
+               //HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+               /* DEBUG */
+               do {
+                  m_cTUARTController.Read();
+               }
+               while(bHasData = m_cTUARTController.Available());
+               sprintf(buffer, "Got RX: Writing\r\n");
+               HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
+               m_cTUARTController.WriteByte('B');
+               m_cTUARTController.WriteByte('L');
+               m_cTUARTController.WriteByte('O');
+               m_cTUARTController.WriteByte('C');
+               m_cTUARTController.WriteByte('K');
+               m_cTUARTController.WriteByte(' ');
+               m_cTUARTController.WriteByte('O');
+               m_cTUARTController.WriteByte('S');
+               m_cTUARTController.WriteByte('\r');
+               m_cTUARTController.WriteByte('\n');
+            }
+#endif
+            continue;
+            break;
          }
-         //HardwareSerial::instance().write((const uint8_t*)"Reading from MPU6050\r\n",22);
-         
-         //CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
-         //CTWController::GetInstance().Write(MPU6050_WHOAMI);
-         //CTWController::GetInstance().EndTransmission(false);
-         //CTWController::GetInstance().Read(MPU6050_ADDR, 1, true);
-         //m_unResult = CTWController::GetInstance().Read();      
-         //HardwareSerial::instance().write((const uint8_t*)"MPU6050 returned: ",18);
-         //HardwareSerial::instance().write(m_unResult);
-         //HardwareSerial::instance().write((const uint8_t*)"\r\n",2);
-
-         // Read timer values
          /*
-         sprintf(bufa, "InterruptOCAOccured = %s\r\n", m_cTUARTController.InterruptOCAOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptOCBOccured = %s\r\n", m_cTUARTController.InterruptOCBOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptICOccured = %s\r\n", m_cTUARTController.InterruptICOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "EnabledOCBInterrupt = %s\r\n", m_cTUARTController.EnabledOCBInterrupt?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagA = %s\r\n", m_cTUARTController.FlagA?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagB = %s\r\n", m_cTUARTController.FlagB?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagC = %s\r\n", m_cTUARTController.FlagC?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         */
-         m_cTimer.Delay(3000);
-         HardwareSerial::instance().write((const uint8_t*)"sending '+++'\r\n", 15);
-         m_cTUARTController.WriteByte('+');
-         m_cTUARTController.WriteByte('+');
-         m_cTUARTController.WriteByte('+');
-
-         sprintf(bufa, "TxBuffer.Head = %u, TxBuffer.Tail = %u\r\n", 
-                 m_cTUARTController.m_sTxBuffer.Head, 
-                 m_cTUARTController.m_sTxBuffer.Tail);
-                 HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         /*
-         sprintf(bufa, "InterruptOCAOccured = %s\r\n", m_cTUARTController.InterruptOCAOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptOCBOccured = %s\r\n", m_cTUARTController.InterruptOCBOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptICOccured = %s\r\n", m_cTUARTController.InterruptICOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "EnabledOCBInterrupt = %s\r\n", m_cTUARTController.EnabledOCBInterrupt?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagA = %s\r\n", m_cTUARTController.FlagA?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagB = %s\r\n", m_cTUARTController.FlagB?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagC = %s\r\n", m_cTUARTController.FlagC?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         */
          
          m_cTimer.Delay(2000);
          sprintf(bufa, "RxState = %u, RxByte = %X, RxBuffer.Head = %u, RxBuffer.Tail = %u, DetectedEdges = %u\r\n", 
@@ -114,33 +168,6 @@ public:
                  m_cTUARTController.m_sRxBuffer.Head,
                  m_cTUARTController.m_sRxBuffer.Tail,
                  m_cTUARTController.DetectedEdges);
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         /*
-         for(uint8_t i = 0; i < 40; i++) {
-            m_cTimer.Delay(1);
-            sprintf(bufa, "%3u: %6u\t%u\t0x%2x\t0x%2x\r\n", 
-                    m_cTUARTController.Samples[i].EdgeIndex,
-                    m_cTUARTController.Samples[i].CaptureTime,
-                    m_cTUARTController.Samples[i].RxState,
-                    m_cTUARTController.Samples[i].RxByte,
-                    m_cTUARTController.Samples[i].RxBit);
-            HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         }
-         
-         sprintf(bufa, "\nInterruptOCAOccured = %s\r\n", m_cTUARTController.InterruptOCAOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptOCBOccured = %s\r\n", m_cTUARTController.InterruptOCBOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "InterruptICOccured = %s\r\n", m_cTUARTController.InterruptICOccured?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "EnabledOCBInterrupt = %s\r\n", m_cTUARTController.EnabledOCBInterrupt?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagA = %s\r\n", m_cTUARTController.FlagA?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagB = %s\r\n", m_cTUARTController.FlagB?"true":"false");
-         HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
-         sprintf(bufa, "FlagC = %s\r\n", m_cTUARTController.FlagC?"true":"false");
          HardwareSerial::instance().write((const uint8_t*)bufa,strlen(bufa));
          */
       }
