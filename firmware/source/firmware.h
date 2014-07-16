@@ -18,6 +18,7 @@
 
 /* I2C Address Space */
 #define MPU6050_ADDR               0x68
+#define LTC2990_ADDR               0x4C
 
 /* MPU6050 Registers */
 #define MPU6050_WHOAMI             0x75
@@ -34,6 +35,25 @@
 #define MPU6050_TEMP_OUT_H         0x41 // R  
 #define MPU6050_TEMP_OUT_L         0x42 // R  
 
+/* LTC2990 Registers */
+#define LTC2990_STATUS             0x00 // R
+#define LTC2990_CONTROL            0x01 // R/W
+#define LTC2990_TRIGGER            0x02 // R/W
+
+#define LTC2990_TINT_H             0x04 // R
+#define LTC2990_TINT_L             0x05 // R
+#define LTC2990_V1_H               0x06 // R
+#define LTC2990_V1_L               0x07 // R
+#define LTC2990_V2_H               0x08 // R
+#define LTC2990_V2_L               0x09 // R
+#define LTC2990_V3_H               0x0A // R
+#define LTC2990_V3_L               0x0B // R
+#define LTC2990_V4_H               0x0C // R
+#define LTC2990_V4_L               0x0D // R
+#define LTC2990_VCC_H              0x0E // R
+#define LTC2990_VCC_L              0x0F // R
+
+
 #define PORT_CTRL_MASK 0x0F
 
 class Firmware {
@@ -44,6 +64,10 @@ public:
    }
 
    int exec() {
+      bool bDataValid = false;
+      bool bAlarmASet = false;
+      bool bAlarmBSet = false;
+
       char buffer[200] = {0};
       HardwareSerial::instance().write((const uint8_t*)"Smartblock MCU Online\r\n",23);
 
@@ -143,19 +167,16 @@ public:
             */
             sprintf(buffer, "Checking MPU6050 Address (WA)\r\n");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
-
-
+            
             CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
             CTWController::GetInstance().Write(MPU6050_WHOAMI);
-
             CTWController::GetInstance().EndTransmission(false);
 
             sprintf(buffer, "Checking MPU6050 Address (RD)\r\n");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
 
             CTWController::GetInstance().Read(MPU6050_ADDR, 1, true);
-
-            
+         
             /* Check if the WHOAMI register contains the MPU6050 address value  */
             if(CTWController::GetInstance().Read() == MPU6050_ADDR) {
                sprintf(buffer, "Found MPU6050 Sensor at 0x68!\r\n");
@@ -169,7 +190,6 @@ public:
             }
             
             /* select internal clock, disable sleep/cycle mode, enable temperature sensor*/
-
             CTWController::GetInstance().BeginTransmission(MPU6050_ADDR);
             sprintf(buffer, "Updating Power Management (WA)\r\n");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
@@ -178,14 +198,143 @@ public:
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
             CTWController::GetInstance().Write(0x00);
             CTWController::GetInstance().EndTransmission(true);
+
+            /* configure the LTC2990 - battery current and voltage monitoring */
+            CTWController::GetInstance().BeginTransmission(LTC2990_ADDR);
+            CTWController::GetInstance().Write(LTC2990_CONTROL);
+            /* configure LTC2990, perform all measurements when triggered,
+               in differential voltage mode, temperature in celsius */
+            CTWController::GetInstance().Write(0x5E);
+            CTWController::GetInstance().EndTransmission(true);
             
             eTestbenchState = ETestbenchState::TESTBENCH_INIT_DONE;
-            sprintf(buffer, "Testbench Initialised - Press any key on WiFi connection to sample MPU6050\r\n");
+            sprintf(buffer, "Testbench Initialised!\r\n");
             HardwareSerial::instance().write((const uint8_t*)buffer,strlen(buffer));
             continue;
             break;
          case ETestbenchState::TESTBENCH_INIT_DONE:
             m_cTimer.Delay(500);
+            /* Print the uptime to the Xbee port */
+            sprintf(buffer, "Uptime = %lu\r\n", m_cTimer.GetMilliseconds());
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+
+            /* Trigger battery voltage and current measurement */
+            CTWController::GetInstance().BeginTransmission(LTC2990_ADDR);
+            CTWController::GetInstance().Write(LTC2990_TRIGGER);
+            CTWController::GetInstance().Write(0x00);
+            CTWController::GetInstance().EndTransmission(true);
+            /* Wait 50ms for conversion to finish */
+            m_cTimer.Delay(50);
+            /* Read back results */
+            CTWController::GetInstance().BeginTransmission(LTC2990_ADDR);
+            CTWController::GetInstance().Write(LTC2990_TINT_H);
+            CTWController::GetInstance().EndTransmission(false);
+            CTWController::GetInstance().Read(LTC2990_ADDR, 12, true);
+
+            /* Read the requested 10 bytes */
+            uint8_t punLTC2990Res[12];
+            for(uint8_t i = 0; i < 12; i++) {
+               punLTC2990Res[i] = CTWController::GetInstance().Read();
+            }
+            
+            /*******************************************/
+            /* Dump the results on the Xbee connection */
+            /*******************************************/
+            // Internal temperature
+            bDataValid = ((punLTC2990Res[0] & 0x80) != 0);
+            bAlarmASet = ((punLTC2990Res[0] & 0x40) != 0);
+            bAlarmBSet = ((punLTC2990Res[0] & 0x20) != 0);
+            // remove flags with sign extend
+            if((punLTC2990Res[0] & 0x10) != 0)
+               punLTC2990Res[0] |= 0xE0;
+            else
+               punLTC2990Res[0] &= ~0xE0;
+            // print result
+            sprintf(buffer, 
+                    "[%c%c%c] Temp = %i\r\n",
+                    bDataValid?'V':'-', 
+                    bAlarmASet?'A':'-',
+                    bAlarmBSet?'B':'-',
+                    int16_t((punLTC2990Res[0] << 8) | punLTC2990Res[1]));                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            // V1 - V2 Verify A
+            bDataValid = ((punLTC2990Res[2] & 0x80) != 0);
+            // Remove flags with sign extend
+            if((punLTC2990Res[2] & 0x40) != 0)
+               punLTC2990Res[2] |= 0x80;
+            else
+               punLTC2990Res[2] &= ~0x80;
+            sprintf(buffer, 
+                    "[%c] (A) I(batt) = %imA\r\n",
+                    bDataValid?'V':'-', 
+                    int16_t((punLTC2990Res[2] << 8) | punLTC2990Res[3]) / 3);                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            // V1 - V2 Verify B
+            bDataValid = ((punLTC2990Res[4] & 0x80) != 0);
+            // Remove flags with sign extend
+            if((punLTC2990Res[4] & 0x40) != 0)
+               punLTC2990Res[4] |= 0x80;
+            else
+               punLTC2990Res[4] &= ~0x80;
+            sprintf(buffer, 
+                    "[%c] (B) I(batt) = %imA\r\n",
+                    bDataValid?'V':'-', 
+                    int16_t((punLTC2990Res[4] << 8) | punLTC2990Res[5]) / 3);                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            // V3 - V4 Verify A
+            bDataValid = ((punLTC2990Res[6] & 0x80) != 0);
+            // Remove flags with sign extend
+            if((punLTC2990Res[6] & 0x40) != 0)
+               punLTC2990Res[6] |= 0x80;
+            else
+               punLTC2990Res[6] &= ~0x80;
+            sprintf(buffer, 
+                    "[%c] (A) V(batt) = %imV\r\n",
+                    bDataValid?'V':'-', 
+                    int16_t((punLTC2990Res[6] << 8) | punLTC2990Res[7]) / 3678);                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            // V3 - V4 Verify B
+            bDataValid = ((punLTC2990Res[8] & 0x80) != 0);
+            // Remove flags with sign extend
+            if((punLTC2990Res[8] & 0x40) != 0)
+               punLTC2990Res[8] |= 0x80;
+            else
+               punLTC2990Res[8] &= ~0x80;
+            sprintf(buffer, 
+                    "[%c] (B) V(batt) = %imV\r\n",
+                    bDataValid?'V':'-', 
+                    int16_t((punLTC2990Res[8] << 8) | punLTC2990Res[9]) / 3678);                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            // VCC
+            bDataValid = ((punLTC2990Res[10] & 0x80) != 0);
+            // Remove flags with sign extend
+            if((punLTC2990Res[10] & 0x40) != 0)
+               punLTC2990Res[10] |= 0x80;
+            else
+               punLTC2990Res[10] &= ~0x80;
+            sprintf(buffer, 
+                    "[%c] (B) V(d) = %imV\r\n",
+                    bDataValid?'V':'-', 
+                    2500 + int16_t((punLTC2990Res[10] << 8) | punLTC2990Res[11]) / 3277);                                    
+            for(uint8_t i = 0; buffer[i] != '\0'; i++) {
+               m_cTUARTController.WriteByte(buffer[i]);
+            }
+            
+            /* delay 50ms to clear the TUART buffers - perhaps not required */
+            m_cTimer.Delay(50);
+
             if(m_cTUARTController.Available()) {
                while(m_cTUARTController.Available()) m_cTUARTController.Read();
                /* Sample sensor */
