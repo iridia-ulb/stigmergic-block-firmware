@@ -403,7 +403,7 @@ CTUARTController::~CTUARTController() {
 /**           Transmission             **/
 /****************************************/
 
-void CTUARTController::WriteByte(uint8_t un_byte)
+void CTUARTController::Write(uint8_t un_byte)
 {
    uint8_t intr_state, head;
 

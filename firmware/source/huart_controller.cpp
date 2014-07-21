@@ -89,12 +89,12 @@ HardwareSerial::HardwareSerial() {
    *_ucsrb = 0;
 
    /* start up serial */
-   begin(57600);
+   Begin(57600);
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
 
-void HardwareSerial::begin(unsigned long baud)
+void HardwareSerial::Begin(unsigned long baud)
 {
   uint16_t baud_setting;
   bool use_u2x = true;
@@ -133,7 +133,7 @@ try_again:
 /****************************************/
 /****************************************/
 
-void HardwareSerial::end()
+void HardwareSerial::End()
 {
   // wait for transmission of outgoing data
   while (_tx_buffer->head != _tx_buffer->tail);
@@ -152,7 +152,7 @@ void HardwareSerial::end()
 /****************************************/
 /****************************************/
 
-int HardwareSerial::available(void)
+int HardwareSerial::Available(void)
 {
   return (int)(SERIAL_BUFFER_SIZE + _rx_buffer->head - _rx_buffer->tail) % SERIAL_BUFFER_SIZE;
 }
@@ -160,7 +160,7 @@ int HardwareSerial::available(void)
 /****************************************/
 /****************************************/
 
-int HardwareSerial::peek(void)
+int HardwareSerial::Peek(void)
 {
   if (_rx_buffer->head == _rx_buffer->tail) {
     return -1;
@@ -172,7 +172,7 @@ int HardwareSerial::peek(void)
 /****************************************/
 /****************************************/
 
-int HardwareSerial::read(void)
+int HardwareSerial::Read(void)
 {
   // if the head isn't ahead of the tail, we don't have any characters
   if (_rx_buffer->head == _rx_buffer->tail) {
@@ -187,7 +187,7 @@ int HardwareSerial::read(void)
 /****************************************/
 /****************************************/
 
-void HardwareSerial::flush()
+void HardwareSerial::Flush()
 {
   // UDR is kept full while the buffer is not empty, so TXC triggers when EMPTY && SENT
   while (transmitting && ! (*_ucsra & _BV(TXC0)));
@@ -197,7 +197,7 @@ void HardwareSerial::flush()
 /****************************************/
 /****************************************/
 
-uint8_t HardwareSerial::write(uint8_t c)
+uint8_t HardwareSerial::Write(uint8_t c)
 {
   unsigned int i = (_tx_buffer->head + 1) % SERIAL_BUFFER_SIZE;
 	

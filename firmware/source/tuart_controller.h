@@ -24,7 +24,7 @@ public:
                     uint8_t un_output_comp_b_intr_num);
    ~CTUARTController();
 
-   void WriteByte(uint8_t byte);
+   void Write(uint8_t byte);
 
    uint8_t Peek();
    uint8_t Read();

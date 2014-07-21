@@ -54,22 +54,23 @@ public:
       return _hardware_serial;
    }
 
-   void begin(unsigned long);
-   void end();
-   virtual int available(void);
-   virtual int peek(void);
-   virtual int read(void);
-   virtual void flush(void);
+   void Begin(unsigned long);
+   void End();
+   virtual int Available(void);
+   virtual int Peek(void);
+   virtual int Read(void);
+   virtual void Flush(void);
    
-
-   uint8_t write(const uint8_t* data, uint8_t count) {
+   /*
+   uint8_t Write(const uint8_t* data, uint8_t count) {
       for(uint8_t i = 0; i < count; i++) {
          write(data[i]);
       }
       return count;
    }
+   */
 
-   virtual uint8_t write(uint8_t);
+   virtual uint8_t Write(uint8_t);
    //inline size_t write(unsigned long n) { return write((uint8_t)n); }
    //inline size_t write(long n) { return write((uint8_t)n); }
    //inline size_t write(unsigned int n) { return write((uint8_t)n); }
