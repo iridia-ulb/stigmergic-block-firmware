@@ -16,6 +16,7 @@
 #include <huart_controller.h>
 #include <tuart_controller.h>
 #include <tw_controller.h>
+#include <nfc_controller.h>
 #include <timer.h>
 
 /* I2C Address Space */
@@ -114,6 +115,9 @@ enum class EPCA9635Register : uint8_t {
 
 #define XBEE_RST_PIN   0x20
 
+
+
+
 enum class EFaceBoard : uint8_t {
    NORTH  = 0x01,
    EAST   = 0x02,
@@ -152,7 +156,20 @@ public:
       return m_cTWController;
    }
 
+   CTimer& GetTimer() {
+      return m_cTimer;
+   }
+
+   /* correctly connected LEDs for testing */
+   uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
+
    int Exec() {
+      
+      // NFC related stuff
+      uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','O','C','K','\0'};
+      uint8_t punInboundBuffer[60];
+      uint8_t unRxCount = 0;
+
       bool bDataValid, bAlarmASet, bAlarmBSet;
 
       enum class ETestbenchState {
@@ -161,7 +178,8 @@ public:
          TEST_WIFI,
          TEST_FACE_RESET,
          TEST_LEDS,
-      } eTestbenchState = ETestbenchState::TEST_LEDS;
+         TEST_NFC
+      } eTestbenchState = ETestbenchState::TEST_NFC;
 
       //InitXbee();
       InitMPU6050();
@@ -170,7 +188,8 @@ public:
       InitPCA9554_IRQ();
       InitPCA9635();
 
-      IssueFaceReset(uint8_t(EFaceBoard::EAST));
+      //m_pcFaces[EFaceBoard::EAST].Reset()
+      Reset(uint8_t(EFaceBoard::EAST));
 
       fprintf(m_psHUART, "Testbench Initialisation : SUCCESS\r\n");
 
@@ -286,12 +305,11 @@ public:
             break;
          case ETestbenchState::TEST_FACE_RESET:
             fprintf(m_psTUART, "Asserting reset on EAST face\r\n");
-            IssueFaceReset(uint8_t(EFaceBoard::EAST));
+            Reset(uint8_t(EFaceBoard::EAST));
             eTestbenchState = ETestbenchState::TEST_LEDS;
             continue;
             break;
          case ETestbenchState::TEST_LEDS:
-            uint8_t punLEDIdx[] = {0,1,2, 12, 11, 10};
             for(uint8_t un_led_idx = 0; un_led_idx < 6; un_led_idx++) {
                for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
                   m_cTimer.Delay(5);
@@ -302,10 +320,53 @@ public:
                   PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
                }
             }
-            eTestbenchState = ETestbenchState::TEST_ACCELEROMETER;
+            eTestbenchState = ETestbenchState::TEST_NFC;
             continue;
             break;
+         case ETestbenchState::TEST_NFC:
+            m_cTimer.Delay(500);
+            if(m_cNFCController.Probe() == true) {
+               fprintf(m_psHUART, "Found NFC Controller\r\n");
+            }
+            else {
+               fprintf(m_psHUART, "NFC Controller not detected\r\n");
+               m_cTimer.Delay(4000);
+               continue;
+            }
 
+            if(m_cNFCController.ConfigureSAM() == true) {
+               fprintf(m_psHUART, "SAM Configured\r\n");
+            }
+            else {
+               fprintf(m_psHUART, "Unable to configure SAM\r\n");
+               m_cTimer.Delay(4000);
+               continue;
+            }
+
+
+            unRxCount = 0;
+            for(uint8_t cnt = 0; cnt < 100; cnt++) {
+               fprintf(m_psHUART, ".");
+               if(m_cNFCController.P2PTargetInit()) {
+                  fprintf(m_psHUART, "Connection Established\r\n");
+                  unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
+                                                             11,
+                                                             punInboundBuffer,
+                                                             60);
+                  if(unRxCount > 0) {
+                     fprintf(m_psHUART, "Received %i bytes of RX data: %s\r\n", unRxCount, punInboundBuffer);
+                     m_cTimer.Delay(1000);
+                     break;
+                  }
+                  else {
+                     fprintf(m_psHUART, "No data received\r\n");
+                  }
+               }
+            }
+            eTestbenchState = ETestbenchState::TEST_NFC;
+            //eTestbenchState = ETestbenchState::TEST_ACCELEROMETER;
+            continue;
+            break;
          }
       }
       return 0;
@@ -323,7 +384,7 @@ private:
    bool InitPCA9635();
 
    /* Faceboard commands */
-   void IssueFaceReset(uint8_t un_reset_target);
+   void Reset(uint8_t un_reset_target);
    void PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode);
    void PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val);
 
@@ -369,10 +430,6 @@ private:
    
    CTimer m_cTimer;
 
-   /* File structs for fprintf */
-   FILE* m_psHUART;
-   FILE* m_psTUART;
-
    /* ATMega328P Controllers */
    /* TODO remove singleton and reference from HUART */
    //CHUARTController& m_cHUARTController;
@@ -382,7 +439,17 @@ private:
 
    CTWController& m_cTWController;
 
+   CNFCController m_cNFCController;
+
    static Firmware _firmware;
+
+public: // TODO, don't make these public
+    /* File structs for fprintf */
+   FILE* m_psHUART;
+   FILE* m_psTUART;
+
+
+
 };
 
 #endif

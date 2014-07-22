@@ -24,21 +24,17 @@
 #define TW_CONTROLLER_H
 
 #include <inttypes.h>
-//#include "Stream.h"
 
-#define TW_BUFFER_LENGTH 32
+#define TW_BUFFER_LENGTH 64
 #define TW_SCL_FREQ 100000L
 
 #define TW_STATE_READY 0
 #define TW_STATE_MRX   1
 #define TW_STATE_MTX   2
-//#define TWI_SRX   3
-//#define TWI_STX   4
 
 #define TW_BUS_NO_ERROR 0xFF
 
-class CTWController //: public Stream
-{
+class CTWController {
 private:
    uint8_t m_punRxBuffer[TW_BUFFER_LENGTH];
    uint8_t m_unRxBufferIndex;
@@ -65,8 +61,6 @@ public:
    virtual uint8_t Peek();
    virtual void Flush();
   
-   //using Print::Write;
-
    static CTWController& GetInstance() {
       return m_cTWController;
    }

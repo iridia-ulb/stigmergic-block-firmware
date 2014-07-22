@@ -287,7 +287,6 @@ void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
 }
 
 void Firmware::PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val) {
-
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::PWM0) + un_led;
 
    Firmware::GetInstance().GetTWController().BeginTransmission(PCA9635_ADDR);
@@ -299,7 +298,7 @@ void Firmware::PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val) {
    PCA9635_SetLEDMode(un_led, EPCA9635LEDMode::PWM);
 }
 
-void Firmware::IssueFaceReset(uint8_t un_reset_target) {
+void Firmware::Reset(uint8_t un_reset_target) {
    Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
    Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
    Firmware::GetInstance().GetTWController().EndTransmission(false);
@@ -312,7 +311,7 @@ void Firmware::IssueFaceReset(uint8_t un_reset_target) {
    Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
    Firmware::GetInstance().GetTWController().Write(unFaceReset);
    Firmware::GetInstance().GetTWController().EndTransmission(true);
-#if 0
+
    /* Allow 1ms reset time */
    m_cTimer.Delay(1); // os sleep
    /* Recheck register state, may have changed while we slept */
@@ -329,6 +328,5 @@ void Firmware::IssueFaceReset(uint8_t un_reset_target) {
    /* Configure the reset lines to the faces as ouputs (driven high by default) */
    Firmware::GetInstance().GetTWController().Write(unFaceReset);
    Firmware::GetInstance().GetTWController().EndTransmission(true);
-#endif
 }
 
