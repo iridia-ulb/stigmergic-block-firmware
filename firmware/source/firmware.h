@@ -167,6 +167,8 @@ public:
 
       InitXbee();
 
+      InitMPU6050();
+
       /* Note: due to board issue, this actually disables the LEDs - 
          although TW should still work, disable only disables the outputs */
       m_cPortController.EnablePort(CPortController::EPort::EAST);
