@@ -25,9 +25,12 @@
 */
 /*****************************************************************************/
 
+#include <avr/pgmspace.h>
 #include <firmware.h>
 
 #include "nfc_controller.h"
+
+#define DEBUG
 
 uint8_t ack[6]={
     0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00
@@ -36,33 +39,60 @@ uint8_t nfc_version[6]={
     0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03
 };
 
-/*****************************************************************************/
-/*!
-	@brief
-	@param
-*/
-/*****************************************************************************/
-CNFCController::CNFCController(void) {
-
+bool CNFCController::PowerDown() {
+   m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::POWERDOWN);
+   m_punIOBuffer[1] = 0x88; // Wake up on RF field & I2C
+   m_punIOBuffer[2] = 0x01; // Generate an IRQ on wake up
+   /* write command and check ack frame */
+   if(!write_cmd_check_ack(m_punIOBuffer, 3)) {
+#ifdef DEBUG
+      fprintf(Firmware::GetInstance().m_psTUART, 
+              "PN532 didn't send acknowledgement frame\r\n");
+#endif
+      return false;
+   }
+   /* wait until ready */
+   wait_ready();
+   /* read the rest of the reply */
+   read_dt(m_punIOBuffer, 8);
+   /* verify that the recieved data was a reply frame to given command */
+   if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
+      m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::POWERDOWN)) {
+#ifdef DEBUG
+      fprintf(Firmware::GetInstance().m_psTUART, 
+              "Reply frame format error\r\n");
+#endif
+      return false;
+   }
+   /* check the lower 6 bits of the status byte, error code 0x00 means success */
+   if((m_punIOBuffer[NFC_FRAME_STATUS_INDEX] & 0x3F) != 0x00) {
+#ifdef DEBUG
+      fprintf(Firmware::GetInstance().m_psTUART, 
+              "Status byte contained error: 0x%02x\r\n",
+              m_punIOBuffer[NFC_FRAME_STATUS_INDEX] & 0x3F);
+#endif
+      return false;
+   }
+   return true;
 }
 
-bool CNFCController::Probe()
-{
+
+bool CNFCController::Probe() {
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION);
+   /* write command and check ack frame */
    if(!write_cmd_check_ack(m_punIOBuffer, 1)) {
       return false;
    }
+   /* wait until ready */
    wait_ready();
-
-   /* read response */
+   /* read the rest of the reply */
    read_dt(m_punIOBuffer, 12);
-
-   /* verify that the recieved data was a reply frame */
-   if(m_punIOBuffer[5] != PN532_PN532TOHOST) {
+   /* verify that the recieved data was a reply frame to given command */
+   if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
+      m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION)) {
       return false;
    }
-
-   // check the firmware version
+   /* check the firmware version */
    return (strncmp((char *)m_punIOBuffer, (char *)nfc_version, 6) == 0);
 }
 
@@ -77,9 +107,6 @@ bool CNFCController::Probe()
 */
 /*****************************************************************************/
 bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_use_irq) {
-#ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART,"SAMConfiguration\r\n");
-#endif
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::SAMCONFIGURATION);
     m_punIOBuffer[1] = static_cast<uint8_t>(e_mode);
     m_punIOBuffer[2] = un_timeout; // timeout = 50ms * un_timeout
@@ -123,12 +150,12 @@ uint8_t CNFCController::P2PInitiatorInit()
        send_flag = 0;
        if(!write_cmd_check_ack(m_punIOBuffer, 9)) {
 #ifdef DEBUG
-          fprintf(Firmware::GetInstance().m_psHUART, "InJumpForDEP send failed\n");
+          fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP send failed\n");
 #endif
           return 0;
        }
 #ifdef DEBUG
-       fprintf(Firmware::GetInstance().m_psHUART, "InJumpForDEP sent\n");
+       fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP sent\n");
 #endif
     }
 
@@ -143,7 +170,7 @@ uint8_t CNFCController::P2PInitiatorInit()
     if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::INJUMPFORDEP)) {
 #ifdef DEBUG
        puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
-       fprintf(Firmware::GetInstance().m_psHUART, "Initiator init failed");
+       fprintf(Firmware::GetInstance().m_psTUART, "Initiator init failed");
 #endif
        return 0;
     }
@@ -152,7 +179,7 @@ uint8_t CNFCController::P2PInitiatorInit()
     }
 
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART, "InJumpForDEP read success");
+    fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP read success");
 #endif
     send_flag = 1;
     return 1;
@@ -224,12 +251,12 @@ uint8_t CNFCController::P2PTargetInit()
             return 0;
         }
 #ifdef DEBUG
-        fprintf(Firmware::GetInstance().m_psHUART, "Target init sent\r\n");
+        fprintf(Firmware::GetInstance().m_psTUART, "Target init sent\r\n");
 #endif
     }
 
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART, "Waiting 10\r\n");
+    fprintf(Firmware::GetInstance().m_psTUART, "Waiting 10\r\n");
 #endif
 
     wait_ready(10);
@@ -242,14 +269,14 @@ uint8_t CNFCController::P2PTargetInit()
     if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::TGINITASTARGET)) {
 #ifdef DEBUG
         puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
-        fprintf(Firmware::GetInstance().m_psHUART, "Target init fail\r\n");
+        fprintf(Firmware::GetInstance().m_psTUART, "Target init fail\r\n");
 #endif
         return 0;
     }
 
     send_flag = 1;
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART, "TgInitAsTarget read success\r\n");
+    fprintf(Firmware::GetInstance().m_psTUART, "TgInitAsTarget read success\r\n");
 #endif
     return 1;
 }
@@ -282,7 +309,7 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
       return 0;
    }
 #ifdef DEBUG
-   fprintf(Firmware::GetInstance().m_psHUART, "Initiator DataExchange sent\r\n");
+   fprintf(Firmware::GetInstance().m_psTUART, "Initiator DataExchange sent\r\n");
 #endif
 
    wait_ready(200);
@@ -293,29 +320,29 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
    }
 
 #ifdef DEBUG
-   fprintf(Firmware::GetInstance().m_psHUART, "Initiator DataExchange Get\r\n");
+   fprintf(Firmware::GetInstance().m_psTUART, "Initiator DataExchange Get\r\n");
 #endif
 
    if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::INDATAEXCHANGE)){
 #ifdef DEBUG
       puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
-      fprintf(Firmware::GetInstance().m_psHUART, "Send data failed\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART, "Send data failed\r\n");
 #endif
       return 0;
    }
 
    if(m_punIOBuffer[NFC_FRAME_ID_INDEX + 1]) {
 #ifdef DEBUG
-      fprintf(Firmware::GetInstance().m_psHUART,"InExchangeData Error: ");
+      fprintf(Firmware::GetInstance().m_psTUART,"InExchangeData Error: ");
       puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
-      fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART, "\r\n");
 #endif
       return 0;
    }
 
 #ifdef DEBUG
    puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
-   fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+   fprintf(Firmware::GetInstance().m_psTUART, "\r\n");
 #endif
    /* return number of read bytes */
    uint8_t unRxDataLength = m_punIOBuffer[3] - 3;
@@ -353,23 +380,23 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::TGGETDATA)) {
 #ifdef DEBUG
       puthex(m_punIOBuffer, 20);
-      fprintf(Firmware::GetInstance().m_psHUART, "Target GetData failed\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART, "Target GetData failed\r\n");
 #endif
       return 0;
    }
    if(m_punIOBuffer[NFC_FRAME_ID_INDEX + 1]) {
 #ifdef DEBUG
-      fprintf(Firmware::GetInstance().m_psHUART,"TgGetData Error:");
+      fprintf(Firmware::GetInstance().m_psTUART,"TgGetData Error:");
       puthex(m_punIOBuffer, m_punIOBuffer[3]+7);
-      fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART, "\r\n");
 #endif
       return 0;
    }
 
 #ifdef DEBUG
-   fprintf(Firmware::GetInstance().m_psHUART, "TgGetData: ");
+   fprintf(Firmware::GetInstance().m_psTUART, "TgGetData: ");
    puthex(m_punIOBuffer, m_punIOBuffer[3]+7);
-   fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+   fprintf(Firmware::GetInstance().m_psTUART, "\r\n");
 #endif
 
    /* read data */
@@ -391,7 +418,7 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::TGSETDATA)) {
 #ifdef DEBUG
       puthex(m_punIOBuffer, 20);
-      fprintf(Firmware::GetInstance().m_psHUART, "Send data failed\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART, "Send data failed\r\n");
 #endif
       return 0;
    }
@@ -437,15 +464,15 @@ bool CNFCController::SetParameters(uint8_t un_param) {
 
 uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
     write_cmd(cmd, len);
-    wait_ready();
+    //wait_ready();
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART,"IRQ received\r\n");
+    fprintf(Firmware::GetInstance().m_psTUART,"Checking for ACK frame\r\n");
 #endif
 
     // read acknowledgement
     if (!read_ack()) {
 #ifdef DEBUG
-       fprintf(Firmware::GetInstance().m_psHUART, "No ACK frame received!\r\n");
+       fprintf(Firmware::GetInstance().m_psTUART, "No ACK frame received!\r\n");
 #endif
        return false;
     }
@@ -462,14 +489,14 @@ uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
 */
 /*****************************************************************************/
 void CNFCController::puthex(uint8_t data) {
-   fprintf(Firmware::GetInstance().m_psHUART, "0x%02x ", data);
+   fprintf(Firmware::GetInstance().m_psTUART, "0x%02x ", data);
 }
 
 
 void CNFCController::puthex(uint8_t *buf, uint32_t len) {
     for(uint32_t i = 0; i < len; i++)
     {
-       fprintf(Firmware::GetInstance().m_psHUART, "0x%02x ", buf[i]);
+       fprintf(Firmware::GetInstance().m_psTUART, "0x%02x ", buf[i]);
     }
 }
 
@@ -488,7 +515,7 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
     len++;
 
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART, "Sending: ");
+    fprintf(Firmware::GetInstance().m_psTUART, "Sending: ");
 #endif
 
     Firmware::GetInstance().GetTimer().Delay(2);     // or whatever the delay is for waking up the board
@@ -532,13 +559,15 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
     Firmware::GetInstance().GetTWController().Write(PN532_POSTAMBLE);
 
     // I2C STOP
-    Firmware::GetInstance().GetTWController().EndTransmission();
-
+    uint8_t err = Firmware::GetInstance().GetTWController().EndTransmission();
+  
 #ifdef DEBUG
     puthex(~checksum);
     puthex(PN532_POSTAMBLE);
-    fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+    fprintf(Firmware::GetInstance().m_psTUART, "\r\n");
+    fprintf(Firmware::GetInstance().m_psTUART, "EndTran returned %i\r\n", err);
 #endif
+
 }
 
 /*****************************************************************************/
@@ -546,36 +575,48 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 	@brief  Read data frame from PN532.
 	@param  buf - pointer of data buffer
 	@param  len - length need to read
-	@return NONE.
+	@return true if read was successful.
 */
 /*****************************************************************************/
-void CNFCController::read_dt(uint8_t *buf, uint8_t len)
-{
-    Firmware::GetInstance().GetTimer().Delay(2);
+bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
+   uint8_t unStatus = PN532_I2C_BUSY;
+   // attempt to read response three times
+   for(uint8_t i = 0; i < 3; i++) {
+      Firmware::GetInstance().GetTimer().Delay(10);
+      // Start read (n+1 to take into account leading 0x01 with I2C)
+      Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
+      // Read the status byte
+      unStatus = Firmware::GetInstance().GetTWController().Read();
+
+      if(unStatus == PN532_I2C_READY) {
+         break;
+      }
+      else {
+         // flush the buffer
+         for(uint8_t i=0; i<len; i++) {
+            Firmware::GetInstance().GetTWController().Read();
+         }
+      }
+   }
+
+   if(unStatus == PN532_I2C_READY) {
 
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART,"Reading: ");
+      fprintf(Firmware::GetInstance().m_psTUART,"Reading: ");
 #endif
-    // Start read (n+1 to take into account leading 0x01 with I2C)
-    Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
-
-    // Discard the leading 0x01
-    Firmware::GetInstance().GetTWController().Read();
-    for (uint8_t i=0; i<len; i++)
-    {
-        Firmware::GetInstance().GetTimer().Delay(1);
-        buf[i] = Firmware::GetInstance().GetTWController().Read();
-
+      for(uint8_t i=0; i<len; i++) {
+         buf[i] = Firmware::GetInstance().GetTWController().Read();
 #ifdef DEBUG
-        puthex(buf[i]);
+         puthex(buf[i]);
 #endif
-    }
-    // Discard trailing 0x00 0x00
-    // receive();
-
+      }
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psHUART,"\r\n");
+      fprintf(Firmware::GetInstance().m_psTUART,"\r\n");
 #endif
+   }
+   // Discard trailing 0x00 0x00
+   // receive();
+   return (unStatus == PN532_I2C_READY);
 }
 
 /*****************************************************************************/
@@ -594,7 +635,7 @@ bool CNFCController::read_ack(void)
 
    //    puthex(ack_buf, 6);
    //    Serial.println();
-   return (0 == strncmp((char *)ack_buf, (char *)ack, 6));
+   return (memcmp(ack_buf, ack, 6) == 0);
 }
 
 

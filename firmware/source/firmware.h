@@ -1,7 +1,7 @@
 #ifndef FIRMWARE_H
 #define FIRMWARE_H
 
-#define DEBUG
+//#define DEBUG
 
 /* AVR Headers */
 #include <avr/io.h>
@@ -17,13 +17,12 @@
 #include <tuart_controller.h>
 #include <tw_controller.h>
 #include <nfc_controller.h>
+#include <port_controller.h>
 #include <timer.h>
 
 /* I2C Address Space */
 #define MPU6050_ADDR               0x68
 #define LTC2990_ADDR               0x4C
-#define PCA9554_RST_ADDR           0x20
-#define PCA9554_IRQ_ADDR           0x21
 #define PCA9635_ADDR               0x15
 #define PCA9635_RST                0x03
 
@@ -59,13 +58,6 @@ enum class ELTC2990Register : uint8_t {
    V4_L           = 0x0D, // R
    VCC_H          = 0x0E, // R
    VCC_L          = 0x0F  // R
-};
-
-enum class EPCA9554Register : uint8_t {
-   /* PCA9554 Registers */
-   INPUT          = 0x00, // R
-   OUTPUT         = 0x01, // R/W
-   CONFIG         = 0x03  // R/W
 };
 
 enum class EPCA9635LEDMode : uint8_t {
@@ -116,17 +108,6 @@ enum class EPCA9635Register : uint8_t {
 #define XBEE_RST_PIN   0x20
 
 
-
-
-enum class EFaceBoard : uint8_t {
-   NORTH  = 0x01,
-   EAST   = 0x02,
-   SOUTH  = 0x04,
-   WEST   = 0x08,
-   TOP    = 0x10,
-   BOTTOM = 0x20
-};
-
 class Firmware {
 public:
       
@@ -160,45 +141,110 @@ public:
       return m_cTimer;
    }
 
-   /* correctly connected LEDs for testing */
-   uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
-
    int Exec() {
-      
+
+      enum class ETestbenchState {
+         TEST_LEDS,
+         TEST_TIMER,
+         TEST_ACCELEROMETER,
+         TEST_NFC_TX,
+         TEST_NFC_RX,
+         STANDBY
+      } eTestbenchState = ETestbenchState::STANDBY;
+
+      /* correctly connected LEDs for testing */
+      uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
+
       // NFC related stuff
       uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','O','C','K','\0'};
       uint8_t punInboundBuffer[60];
       uint8_t unRxCount = 0;
 
-      bool bDataValid, bAlarmASet, bAlarmBSet;
-
-      enum class ETestbenchState {
-         TEST_ACCELEROMETER,
-         TEST_BATT_I_V,
-         TEST_WIFI,
-         TEST_FACE_RESET,
-         TEST_LEDS,
-         TEST_NFC
-      } eTestbenchState = ETestbenchState::TEST_NFC;
-
-      //InitXbee();
-      InitMPU6050();
-      InitLTC2990();
-      InitPCA9554_RST();
-      InitPCA9554_IRQ();
-      InitPCA9635();
-
-      //m_pcFaces[EFaceBoard::EAST].Reset()
-      Reset(uint8_t(EFaceBoard::EAST));
-
-      fprintf(m_psHUART, "Testbench Initialisation : SUCCESS\r\n");
-
-      /* Variables for holding results */
-      uint8_t punLTC2990Res[12];
+      /* Array for holding accelerometer result */
       uint8_t punMPU6050Res[8];
 
+      fprintf(m_psHUART, "Init...");
+
+      InitXbee();
+
+      /* Note: due to board issue, this actually disables the LEDs - 
+         although TW should still work, disable only disables the outputs */
+      m_cPortController.EnablePort(CPortController::EPort::EAST);
+      m_cPortController.SelectPort(CPortController::EPort::EAST);
+      InitPCA9635();
+
+      fprintf(m_psHUART, "D...");
+      m_cPortController.DisablePort(CPortController::EPort::SOUTH);
+      m_cTimer.Delay(1000);
+      fprintf(m_psHUART, "E...");
+      m_cPortController.EnablePort(CPortController::EPort::SOUTH);
+      m_cTimer.Delay(1000);
+      fprintf(m_psHUART, "S...");
+      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+      while(!InitPN532()) {
+         m_cTimer.Delay(500);
+         fprintf(m_psHUART, ".");
+      }
+
+      fprintf(m_psHUART, "Done\r\n");
+ 
+
       for(;;) {
+         if(Firmware::GetInstance().GetTUARTController().Available()) {
+            uint8_t unInput = Firmware::GetInstance().GetTUARTController().Read();
+            switch(unInput) {
+            case 'x':
+               eTestbenchState = ETestbenchState::TEST_NFC_TX;
+               break;
+            case 'l':
+               eTestbenchState = ETestbenchState::TEST_LEDS;
+               break;
+            case 't':
+               eTestbenchState = ETestbenchState::TEST_TIMER;
+               break;
+            case 'a':
+               eTestbenchState = ETestbenchState::TEST_ACCELEROMETER;
+               break;
+            default:
+               eTestbenchState = ETestbenchState::STANDBY;
+               break;
+            }
+            Firmware::GetInstance().GetTUARTController().FlushInput();
+         }
          switch(eTestbenchState) {
+         case ETestbenchState::STANDBY:
+            m_cPortController.SynchronizeInterrupts();
+            if(m_cPortController.HasInterrupts()) {
+               fprintf(m_psTUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
+               m_cPortController.ClearInterrupts();
+               eTestbenchState = ETestbenchState::TEST_NFC_RX;
+            }
+            continue;
+            break;
+         case ETestbenchState::TEST_TIMER:
+            fprintf(m_psTUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());            
+            eTestbenchState = ETestbenchState::STANDBY;
+            continue;
+            break;
+         case ETestbenchState::TEST_LEDS:
+            m_cPortController.SelectPort(CPortController::EPort::EAST);
+            /* issue - enable port */
+            m_cPortController.DisablePort(CPortController::EPort::EAST);
+            for(uint8_t un_led_idx = 0; un_led_idx < 6; un_led_idx++) {
+               for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
+                  m_cTimer.Delay(1);
+                  PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+               }
+               for(uint8_t un_val = 0xFF; un_val > 0x00; un_val--) {
+                  m_cTimer.Delay(1);
+                  PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+               }
+            }
+            /* issue - disable port */
+            m_cPortController.EnablePort(CPortController::EPort::EAST);
+            eTestbenchState = ETestbenchState::STANDBY;
+            continue;
+            break;
          case ETestbenchState::TEST_ACCELEROMETER:
             Firmware::GetInstance().GetTWController().BeginTransmission(MPU6050_ADDR);
             Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EMPU6050Register::ACCEL_XOUT_H));
@@ -207,89 +253,7 @@ public:
             /* Read the requested 8 bytes */
             for(uint8_t i = 0; i < 8; i++) {
                punMPU6050Res[i] = Firmware::GetInstance().GetTWController().Read();
-            }          
-            eTestbenchState = ETestbenchState::TEST_BATT_I_V;
-            continue;
-            break;
-         case ETestbenchState::TEST_BATT_I_V:
-            Firmware::GetInstance().GetTWController().BeginTransmission(LTC2990_ADDR);
-            Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(ELTC2990Register::TRIGGER));
-            Firmware::GetInstance().GetTWController().Write(0x00);
-            Firmware::GetInstance().GetTWController().EndTransmission(true);
-            /* Wait 50ms for conversion to finish */
-            m_cTimer.Delay(50);
-            /* Read back results */
-            Firmware::GetInstance().GetTWController().BeginTransmission(LTC2990_ADDR);
-            Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(ELTC2990Register::TINT_H));
-            Firmware::GetInstance().GetTWController().EndTransmission(false);
-            Firmware::GetInstance().GetTWController().Read(LTC2990_ADDR, 12, true);
-            /* Read the requested 12 bytes */
-            for(uint8_t i = 0; i < 12; i++) {
-               punLTC2990Res[i] = Firmware::GetInstance().GetTWController().Read();
             }
-            eTestbenchState = ETestbenchState::TEST_WIFI;
-            continue;
-            break;
-         case ETestbenchState::TEST_WIFI:
-            fprintf(m_psTUART, "Uptime = %lu\r\n", m_cTimer.GetMilliseconds());
-
-            // Internal temperature
-            bDataValid = ((punLTC2990Res[0] & 0x80) != 0);
-            bAlarmASet = ((punLTC2990Res[0] & 0x40) != 0);
-            bAlarmBSet = ((punLTC2990Res[0] & 0x20) != 0);
-            // remove flags with sign extend
-            if((punLTC2990Res[0] & 0x10) != 0)
-               punLTC2990Res[0] |= 0xE0;
-            else
-               punLTC2990Res[0] &= ~0xE0;
-            // print result
-            fprintf(m_psTUART, 
-                    "[%c%c%c] Temp = %i\r\n",
-                    bDataValid?'V':'-', 
-                    bAlarmASet?'A':'-',
-                    bAlarmBSet?'B':'-',
-                    int16_t((punLTC2990Res[0] << 8) | punLTC2990Res[1]) / 16);                                    
-            // V1 - V2
-            bDataValid = ((punLTC2990Res[2] & 0x80) != 0);
-            // Remove flags with sign extend
-            if((punLTC2990Res[2] & 0x40) != 0)
-               punLTC2990Res[2] |= 0x80;
-            else
-               punLTC2990Res[2] &= ~0x80;
-            fprintf(m_psTUART, 
-                    "[%c] I(batt) = %limA\r\n",
-                    bDataValid?'V':'-', 
-                    (int16_t((punLTC2990Res[2] << 8) | punLTC2990Res[3]) * 323666) / 1000000);
-            // V3 - V4
-            bDataValid = ((punLTC2990Res[6] & 0x80) != 0);
-            // Remove flags with sign extend
-            if((punLTC2990Res[6] & 0x40) != 0)
-               punLTC2990Res[6] |= 0x80;
-            else
-               punLTC2990Res[6] &= ~0x80;
-            fprintf(m_psTUART, 
-                    "[%c] V(batt) = %limV\r\n",
-                    bDataValid?'V':'-', 
-                    (int16_t((punLTC2990Res[6] << 8) | punLTC2990Res[7]) * 271880) / 1000000);
-            
-            // VCC
-            bDataValid = ((punLTC2990Res[10] & 0x80) != 0);
-            // Remove flags with sign extend
-            if((punLTC2990Res[10] & 0x40) != 0)
-               punLTC2990Res[10] |= 0x80;
-            else
-               punLTC2990Res[10] &= ~0x80;
-            fprintf(m_psTUART, 
-                    "[%c] V(dd) = %limV\r\n",
-                    bDataValid?'V':'-', 
-                    2500 + (int16_t((punLTC2990Res[10] << 8) | punLTC2990Res[11]) * 305180) / 1000000);
-
-            // Display PGOOD and CHG pin logic state  */
-            fprintf(m_psTUART, 
-                    "PGOOD = %c || CHG = %c\r\n",
-                    (PIND & PWR_MON_PGOOD)?'F':'T',
-                    (PIND & PWR_MON_CHG)?'F':'T');
-
             fprintf(m_psTUART, 
                     "Acc[x] = %i\r\n"
                     "Acc[y] = %i\r\n"
@@ -299,72 +263,64 @@ public:
                     int16_t((punMPU6050Res[2] << 8) | punMPU6050Res[3]),
                     int16_t((punMPU6050Res[4] << 8) | punMPU6050Res[5]),
                     (int16_t((punMPU6050Res[6] << 8) | punMPU6050Res[7]) + 12412) / 340);
-
-            eTestbenchState = ETestbenchState::TEST_FACE_RESET;
+            eTestbenchState = ETestbenchState::STANDBY;
             continue;
             break;
-         case ETestbenchState::TEST_FACE_RESET:
-            fprintf(m_psTUART, "Asserting reset on EAST face\r\n");
-            Reset(uint8_t(EFaceBoard::EAST));
-            eTestbenchState = ETestbenchState::TEST_LEDS;
-            continue;
-            break;
-         case ETestbenchState::TEST_LEDS:
-            for(uint8_t un_led_idx = 0; un_led_idx < 6; un_led_idx++) {
-               for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
-                  m_cTimer.Delay(5);
-                  PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
-               }
-               for(uint8_t un_val = 0xFF; un_val > 0x00; un_val--) {
-                  m_cTimer.Delay(5);
-                  PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
-               }
-            }
-            eTestbenchState = ETestbenchState::TEST_NFC;
-            continue;
-            break;
-         case ETestbenchState::TEST_NFC:
-            m_cTimer.Delay(500);
-            if(m_cNFCController.Probe() == true) {
-               fprintf(m_psHUART, "Found NFC Controller\r\n");
-            }
-            else {
-               fprintf(m_psHUART, "NFC Controller not detected\r\n");
-               m_cTimer.Delay(4000);
-               continue;
-            }
-
-            if(m_cNFCController.ConfigureSAM() == true) {
-               fprintf(m_psHUART, "SAM Configured\r\n");
-            }
-            else {
-               fprintf(m_psHUART, "Unable to configure SAM\r\n");
-               m_cTimer.Delay(4000);
-               continue;
-            }
-
-
+         case ETestbenchState::TEST_NFC_TX:
+            fprintf(m_psTUART, "\r\nTesting NFC TX\r\n");           
+            m_cPortController.SelectPort(CPortController::EPort::SOUTH);
             unRxCount = 0;
             for(uint8_t cnt = 0; cnt < 100; cnt++) {
-               fprintf(m_psHUART, ".");
-               if(m_cNFCController.P2PTargetInit()) {
-                  fprintf(m_psHUART, "Connection Established\r\n");
-                  unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
-                                                             11,
-                                                             punInboundBuffer,
-                                                             60);
+               fprintf(m_psTUART, ".");
+               if(m_cNFCController.P2PInitiatorInit()) {
+                  fprintf(m_psTUART, "\r\nConnected!\r\n");
+                  unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
+                                                                11,
+                                                                punInboundBuffer,
+                                                                60);
                   if(unRxCount > 0) {
-                     fprintf(m_psHUART, "Received %i bytes of RX data: %s\r\n", unRxCount, punInboundBuffer);
-                     m_cTimer.Delay(1000);
+                     fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+                     for(uint8_t i = 0; i < unRxCount; i++) {
+                        fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+                     }
                      break;
                   }
                   else {
-                     fprintf(m_psHUART, "No data received\r\n");
+                     fprintf(m_psTUART, "No data\r\n");
                   }
                }
+               m_cTimer.Delay(100);
             }
-            eTestbenchState = ETestbenchState::TEST_NFC;
-            //eTestbenchState = ETestbenchState::TEST_ACCELEROMETER;
+            m_cNFCController.PowerDown();
+            eTestbenchState = ETestbenchState::STANDBY;
+            continue;
+            break;
+         case ETestbenchState::TEST_NFC_RX:
+            fprintf(m_psTUART, "\r\nTesting NFC RX\r\n");
+            m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+            unRxCount = 0;
+            for(uint8_t cnt = 0; cnt < 100; cnt++) {
+               fprintf(m_psTUART, ".");
+               if(m_cNFCController.P2PTargetInit()) {
+                  unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
+                                                                11,
+                                                                punInboundBuffer,
+                                                                60);
+                  if(unRxCount > 0) {
+                     fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+                     for(uint8_t i = 0; i < unRxCount; i++) {
+                        fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+                     }
+                     break;
+                  }
+                  else {
+                     fprintf(m_psTUART, "No data\r\n");
+                  }
+               }
+               m_cTimer.Delay(100);
+            }
+            m_cNFCController.PowerDown();
+            eTestbenchState = ETestbenchState::STANDBY;
             continue;
             break;
          }
@@ -376,18 +332,13 @@ private:
 
    bool InitXbee();
    bool InitMPU6050();
-   bool InitLTC2990();
-
-   bool InitPCA9554_RST();
-   bool InitPCA9554_IRQ();
 
    bool InitPCA9635();
+   bool InitPN532();
 
-   /* Faceboard commands */
-   void Reset(uint8_t un_reset_target);
+   /* LED commands */
    void PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode);
    void PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val);
-
 
    /* private constructor */
    Firmware() :
@@ -413,15 +364,12 @@ private:
                          TIMER1_CAPT_vect_num,
                          TIMER1_COMPA_vect_num,
                          TIMER1_COMPB_vect_num),
-      m_cTWController(CTWController::GetInstance()) {    
+      m_cTWController(CTWController::GetInstance()) {     
 
       /* Enable interrupts */
       sei();
 
-      // select channel 2 for i2c output 
-      DDRC |= PORT_CTRL_MASK;
-      PORTC &= ~PORT_CTRL_MASK;
-      PORTC |= 1 & PORT_CTRL_MASK; // DISABLE
+      m_cPortController.Init();
 
       // configure the BQ24075 monitoring pins
       DDRD &= ~PWR_MON_MASK;  // set as input
@@ -429,6 +377,8 @@ private:
    }
    
    CTimer m_cTimer;
+
+   CPortController m_cPortController;
 
    /* ATMega328P Controllers */
    /* TODO remove singleton and reference from HUART */
@@ -445,8 +395,8 @@ private:
 
 public: // TODO, don't make these public
     /* File structs for fprintf */
-   FILE* m_psHUART;
    FILE* m_psTUART;
+   FILE* m_psHUART;
 
 
 

@@ -12,10 +12,10 @@ void CInterrupt::Register(CInterrupt* pc_interrupt, uint8_t un_interrupt_num) {
 }
 
 /* Handlers */
-// void CInterrupt::Handler01() {
-//    if(ppcInterruptOwner[0])
-//       ppcInterruptOwner[0]->ServiceRoutine();
-// }
+   void CInterrupt::Handler01() {
+      if(ppcInterruptOwner[0])
+         ppcInterruptOwner[0]->ServiceRoutine();
+   }
 
 // void CInterrupt::Handler02() {
 //    if(ppcInterruptOwner[1])

@@ -13,7 +13,7 @@ private:
    static CInterrupt* ppcInterruptOwner[25];
 
    /* Handlers */
-   // static void Handler01() __asm__("__vector_1") __attribute__((__signal__, __used__, __externally_visible__));
+   static void Handler01() __asm__("__vector_1") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler02() __asm__("__vector_2") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler03() __asm__("__vector_3") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler04() __asm__("__vector_4") __attribute__((__signal__, __used__, __externally_visible__));

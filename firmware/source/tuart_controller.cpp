@@ -468,9 +468,9 @@ uint8_t CTUARTController::Peek(void) {
 bool CTUARTController::Available(void) {
    uint8_t unIntrState = SREG;
    cli();
-   bool bHaveRxData = (m_sRxBuffer.Head != m_sRxBuffer.Tail);
+   bool bHasRxData = (m_sRxBuffer.Head != m_sRxBuffer.Tail);
    SREG = unIntrState;
-   return bHaveRxData;
+   return bHasRxData;
 }
 
 void CTUARTController::FlushInput(void) {

@@ -4,8 +4,6 @@
 #ifndef NFC_CONTROLLER_H
 #define NFC_CONTROLLER_H
 
-#define DEBUG
-
 //////////////////////////////////////
 
 #define PN532_PREAMBLE                      (0x00)
@@ -13,17 +11,15 @@
 #define PN532_STARTCODE2                    (0xFF)
 #define PN532_POSTAMBLE                     (0x00)
 
-#define PN532_HOSTTOPN532                   (0xD4)
-#define PN532_PN532TOHOST                   (0xD5)
 
-
+/*
 #define PN532_WAKEUP                        (0x55)
 
 #define PN532_SPI_STATREAD                  (0x02)
 #define PN532_SPI_DATAWRITE                 (0x01)
 #define PN532_SPI_DATAREAD                  (0x03)
 #define PN532_SPI_READY                     (0x01)
-
+*/
 #define PN532_I2C_ADDRESS                   (0x48 >> 1)
 #define PN532_I2C_READBIT                   (0x01)
 #define PN532_I2C_BUSY                      (0x00)
@@ -111,13 +107,21 @@ enum class ESAMMode : uint8_t {
 
 #define NFC_WAIT_TIME                       30
 #define NFC_CMD_BUF_LEN                     64
-#define NFC_FRAME_ID_INDEX                  6
 
+#define NFC_FRAME_DIRECTION_INDEX           5
+#define NFC_FRAME_ID_INDEX                  6
+#define NFC_FRAME_STATUS_INDEX              7
+
+#define PN532_HOSTTOPN532                   (0xD4)
+#define PN532_PN532TOHOST                   (0xD5)
+
+/*
 typedef enum{
     NFC_STA_TAG,
     NFC_STA_GETDATA,
     NFC_STA_SETDATA,
 }poll_sta_type;
+*/
 
 class CNFCController {
 
@@ -158,11 +162,12 @@ public:
    };
 
 
-   CNFCController();
+   CNFCController() {}
 
    bool ConfigureSAM(ESAMMode e_mode = ESAMMode::NORMAL, uint8_t un_timeout = 20, bool b_use_irq = false);
 
    uint8_t P2PInitiatorInit();
+
    uint8_t P2PTargetInit();
 
    uint8_t P2PInitiatorTxRx(uint8_t* pun_tx_buffer, 
@@ -178,6 +183,8 @@ public:
    bool SetParameters(uint8_t param);
 
    bool Probe();
+
+   bool PowerDown();
 private:
 
 
@@ -185,7 +192,7 @@ private:
 
    void write_cmd(uint8_t *cmd, uint8_t len);
    uint8_t write_cmd_check_ack(uint8_t *cmd, uint8_t len);
-   void read_dt(uint8_t *buf, uint8_t len);
+   bool read_dt(uint8_t *buf, uint8_t len);
    uint8_t wait_ready(uint8_t ms=NFC_WAIT_TIME);
    bool read_ack(void);
 

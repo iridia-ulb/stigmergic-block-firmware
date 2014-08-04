@@ -27,6 +27,7 @@
 #include <avr/interrupt.h>
 
 #include "tw_controller.h"
+#include "firmware.h"
 
 // Preinstantiate Objects //////////////////////////////////////////////////////
 
@@ -269,7 +270,7 @@ uint8_t CTWController::Read(uint8_t un_address, uint8_t un_length, bool b_send_s
 
   // copy buffer into class data buffer
   //some unrequired copying happening here / remove after testing
-  for(uint8_t i = 0; i < un_length; ++i){
+  for(uint8_t i = 0; i < un_length; ++i) {
     m_punRxBuffer[i] = punMasterBuffer[i];
   }
 	
