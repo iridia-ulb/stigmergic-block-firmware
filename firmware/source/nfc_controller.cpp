@@ -1,31 +1,3 @@
-/*****************************************************************************/
-/*!
-    @file     nfc.h
-    @author   www.elechouse.com
-	@brief      NFC Module I2C library source file.
-	This is a library for the Elechoues NFC_Module
-	----> LINKS HERE!!!
-
-    NOTE:
-        IRQ pin is unused.
-
-	@section  HISTORY
-    V1.1    Add fuction about Peer to Peer communication
-                u8 P2PInitiatorInit();
-                u8 P2PTargetInit();
-                u8 P2PInitiatorTxRx(u8 *t_buf, u8 t_len, u8 *r_buf, u8 *r_len);
-                u8 P2PTargetTxRx(u8 *t_buf, u8 t_len, u8 *r_buf, u8 *r_len);
-            Change wait_ready(void) to wait_ready(u8 ms=NFC_WAIT_TIME);
-            Attach Wire library with NFC_MODULE, modify I2C buffer length to 64
-                and change i2c speed to 400KHz
-
-    V1.0    Initial version.
-
-    Copyright (c) 2012 www.elechouse.com  All right reserved.
-*/
-/*****************************************************************************/
-
-#include <avr/pgmspace.h>
 #include <firmware.h>
 
 #include "nfc_controller.h"
@@ -51,8 +23,7 @@ bool CNFCController::PowerDown() {
 #endif
       return false;
    }
-   /* wait until ready */
-   wait_ready();
+
    /* read the rest of the reply */
    read_dt(m_punIOBuffer, 8);
    /* verify that the recieved data was a reply frame to given command */
@@ -83,8 +54,6 @@ bool CNFCController::Probe() {
    if(!write_cmd_check_ack(m_punIOBuffer, 1)) {
       return false;
    }
-   /* wait until ready */
-   wait_ready();
    /* read the rest of the reply */
    read_dt(m_punIOBuffer, 12);
    /* verify that the recieved data was a reply frame to given command */
@@ -159,7 +128,6 @@ uint8_t CNFCController::P2PInitiatorInit()
 #endif
     }
 
-    wait_ready(10);
     read_dt(m_punIOBuffer, 25);
 
     if(m_punIOBuffer[5] != PN532_PN532TOHOST){
@@ -259,7 +227,6 @@ uint8_t CNFCController::P2PTargetInit()
     fprintf(Firmware::GetInstance().m_psTUART, "Waiting 10\r\n");
 #endif
 
-    wait_ready(10);
     read_dt(m_punIOBuffer, 24);
 
     if(m_punIOBuffer[5] != PN532_PN532TOHOST){
@@ -296,9 +263,6 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
                                          uint8_t  un_tx_buffer_len,
                                          uint8_t* pun_rx_buffer,
                                          uint8_t  un_rx_buffer_len) {
-   //    wait_ready();
-   //    wait_ready();
-   wait_ready(15);
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INDATAEXCHANGE);
    m_punIOBuffer[1] = 0x01; // logical number of the relevant target
 
@@ -311,8 +275,6 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
 #ifdef DEBUG
    fprintf(Firmware::GetInstance().m_psTUART, "Initiator DataExchange sent\r\n");
 #endif
-
-   wait_ready(200);
 
    read_dt(m_punIOBuffer, 60);
    if(m_punIOBuffer[5] != PN532_PN532TOHOST){
@@ -371,7 +333,6 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(!write_cmd_check_ack(m_punIOBuffer, 1)){
       return 0;
    }
-   wait_ready(100);
    read_dt(m_punIOBuffer, 60);
    if(m_punIOBuffer[5] != PN532_PN532TOHOST){
       return 0;
@@ -410,7 +371,6 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(!write_cmd_check_ack(m_punIOBuffer, un_tx_buffer_len + 1)) {
       return 0;
    }
-   wait_ready(100);
    read_dt(m_punIOBuffer, 26);
    if(m_punIOBuffer[5] != PN532_PN532TOHOST) {
       return 0;
@@ -464,7 +424,6 @@ bool CNFCController::SetParameters(uint8_t un_param) {
 
 uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
     write_cmd(cmd, len);
-    //wait_ready();
 #ifdef DEBUG
     fprintf(Firmware::GetInstance().m_psTUART,"Checking for ACK frame\r\n");
 #endif
@@ -580,14 +539,18 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 /*****************************************************************************/
 bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
    uint8_t unStatus = PN532_I2C_BUSY;
-   // attempt to read response three times
-   for(uint8_t i = 0; i < 3; i++) {
+   // attempt to read response twenty times
+   for(uint8_t i = 0; i < 20; i++) {
       Firmware::GetInstance().GetTimer().Delay(10);
       // Start read (n+1 to take into account leading 0x01 with I2C)
       Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
       // Read the status byte
       unStatus = Firmware::GetInstance().GetTWController().Read();
 
+#ifdef DEBUG
+      fprintf(Firmware::GetInstance().m_psTUART,"rdt: status = 0x%02x\r\n", unStatus);
+#endif
+    
       if(unStatus == PN532_I2C_READY) {
          break;
       }
@@ -636,19 +599,4 @@ bool CNFCController::read_ack(void)
    //    puthex(ack_buf, 6);
    //    Serial.println();
    return (memcmp(ack_buf, ack, 6) == 0);
-}
-
-
-/*****************************************************************************/
-/*!
-	@brief  Because of IRQ pin is unused, use this function to wait for PN532
-        being ready.
-	@param  NONE.
-	@return Always return ready.
-*/
-/*****************************************************************************/
-uint8_t CNFCController::wait_ready(uint8_t ms)
-{
-    Firmware::GetInstance().GetTimer().Delay(ms);
-    return PN532_I2C_READY;
 }

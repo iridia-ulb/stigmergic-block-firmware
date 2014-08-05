@@ -175,13 +175,10 @@ public:
       m_cPortController.SelectPort(CPortController::EPort::EAST);
       InitPCA9635();
 
-      fprintf(m_psHUART, "D...");
       m_cPortController.DisablePort(CPortController::EPort::SOUTH);
-      m_cTimer.Delay(1000);
-      fprintf(m_psHUART, "E...");
+      m_cTimer.Delay(50);
       m_cPortController.EnablePort(CPortController::EPort::SOUTH);
-      m_cTimer.Delay(1000);
-      fprintf(m_psHUART, "S...");
+      m_cTimer.Delay(50);
       m_cPortController.SelectPort(CPortController::EPort::SOUTH);
       while(!InitPN532()) {
          m_cTimer.Delay(500);
@@ -271,6 +268,9 @@ public:
          case ETestbenchState::TEST_NFC_TX:
             fprintf(m_psTUART, "\r\nTesting NFC TX\r\n");           
             m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+            /* Following two lines for testing, not sure if required */
+            //fprintf(m_psTUART, "Probe: %s\r\n", m_cNFCController.Probe()?"passed":"failed");
+            //fprintf(m_psTUART, "SAM: %s\r\n", m_cNFCController.ConfigureSAM()?"passed":"failed");
             unRxCount = 0;
             for(uint8_t cnt = 0; cnt < 100; cnt++) {
                fprintf(m_psTUART, ".");
@@ -300,14 +300,18 @@ public:
          case ETestbenchState::TEST_NFC_RX:
             fprintf(m_psTUART, "\r\nTesting NFC RX\r\n");
             m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+            /* Following two lines for testing, not sure if required */
+            //fprintf(m_psTUART, "Probe: %s\r\n", m_cNFCController.Probe()?"passed":"failed");
+            //fprintf(m_psTUART, "SAM: %s\r\n", m_cNFCController.ConfigureSAM()?"passed":"failed");
             unRxCount = 0;
             for(uint8_t cnt = 0; cnt < 100; cnt++) {
                fprintf(m_psTUART, ".");
                if(m_cNFCController.P2PTargetInit()) {
-                  unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
-                                                                11,
-                                                                punInboundBuffer,
-                                                                60);
+                  fprintf(m_psTUART, "\r\nConnected!\r\n");
+                  unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
+                                                             11,
+                                                             punInboundBuffer,
+                                                             60);
                   if(unRxCount > 0) {
                      fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
                      for(uint8_t i = 0; i < unRxCount; i++) {
@@ -319,9 +323,13 @@ public:
                      fprintf(m_psTUART, "No data\r\n");
                   }
                }
-               m_cTimer.Delay(100);
+               m_cTimer.Delay(5);
             }
             m_cNFCController.PowerDown();
+            /* Once an response for a command is ready, an interrupt is generated
+               The last interrupt for the power down reply is cleared here */
+            m_cTimer.Delay(100);
+            m_cPortController.ClearInterrupts();
             eTestbenchState = ETestbenchState::STANDBY;
             continue;
             break;
