@@ -72,11 +72,13 @@ public:
 
    CNFCController() {}
 
+   bool Probe();
+
    bool ConfigureSAM(ESAMMode e_mode = ESAMMode::NORMAL, uint8_t un_timeout = 20, bool b_use_irq = false);
 
-   uint8_t P2PInitiatorInit();
+   bool P2PInitiatorInit();
 
-   uint8_t P2PTargetInit();
+   bool P2PTargetInit();
 
    uint8_t P2PInitiatorTxRx(uint8_t* pun_tx_buffer, 
                             uint8_t  un_tx_buffer_len, 
@@ -87,10 +89,6 @@ public:
                          uint8_t  un_tx_buffer_len, 
                          uint8_t* pun_rx_buffer,
                          uint8_t  un_rx_buffer_len);
-
-   bool SetParameters(uint8_t param);
-
-   bool Probe();
 
    bool PowerDown();
 private:

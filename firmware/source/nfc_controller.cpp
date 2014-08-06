@@ -11,6 +11,9 @@ uint8_t nfc_version[6]={
     0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03
 };
 
+/***********************************************************/
+/***********************************************************/
+
 bool CNFCController::PowerDown() {
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::POWERDOWN);
    m_punIOBuffer[1] = 0x88; // Wake up on RF field & I2C
@@ -47,6 +50,8 @@ bool CNFCController::PowerDown() {
    return true;
 }
 
+/***********************************************************/
+/***********************************************************/
 
 bool CNFCController::Probe() {
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION);
@@ -100,10 +105,8 @@ bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_us
             1 - successfully
 */
 /*****************************************************************************/
-uint8_t CNFCController::P2PInitiatorInit()
+bool CNFCController::P2PInitiatorInit()
 {
-    /** avoid resend command */
-    static uint8_t send_flag = 1;
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INJUMPFORDEP);
     m_punIOBuffer[1] = 0x01; // avtive mode
     m_punIOBuffer[2] = 0x02; // 201Kbps
@@ -115,24 +118,22 @@ uint8_t CNFCController::P2PInitiatorInit()
     m_punIOBuffer[7] = 0x00;
     m_punIOBuffer[8] = 0x00;
 
-    if(send_flag) {
-       send_flag = 0;
-       if(!write_cmd_check_ack(m_punIOBuffer, 9)) {
+    if(!write_cmd_check_ack(m_punIOBuffer, 9)) {
 #ifdef DEBUG
-          fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP send failed\n");
+       fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP send failed\n");
 #endif
-          return 0;
-       }
-#ifdef DEBUG
-       fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP sent\n");
-#endif
+       return false;
     }
+
+#ifdef DEBUG
+    fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP sent\n");
+#endif
 
     read_dt(m_punIOBuffer, 25);
 
-    if(m_punIOBuffer[5] != PN532_PN532TOHOST){
+    if(m_punIOBuffer[5] != PN532_PN532TOHOST) {
        //        Serial.println("InJumpForDEP sent read failed");
-       return 0;
+       return false;
     }
 
     if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::INJUMPFORDEP)) {
@@ -140,17 +141,16 @@ uint8_t CNFCController::P2PInitiatorInit()
        puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
        fprintf(Firmware::GetInstance().m_psTUART, "Initiator init failed");
 #endif
-       return 0;
+       return false;
     }
     if(m_punIOBuffer[NFC_FRAME_ID_INDEX + 1]) {
-       return 0;
+       return false;
     }
 
 #ifdef DEBUG
     fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP read success");
 #endif
-    send_flag = 1;
-    return 1;
+    return true;
 }
 
 /*****************************************************************************/
@@ -161,10 +161,8 @@ uint8_t CNFCController::P2PInitiatorInit()
             1 - successfully
 */
 /*****************************************************************************/
-uint8_t CNFCController::P2PTargetInit()
+bool CNFCController::P2PTargetInit()
 {
-    /** avoid resend command */
-    static uint8_t send_flag=1;
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::TGINITASTARGET);
     /** 14443-4A Card only */
     m_punIOBuffer[1] = 0x00;
@@ -212,25 +210,16 @@ uint8_t CNFCController::P2PTargetInit()
     /** Length of historical bytes  */
     m_punIOBuffer[37] = 0x00;
 
-    if(send_flag){
-        send_flag = 0;
-        if(!write_cmd_check_ack(m_punIOBuffer, 38)){
-            send_flag = 1;
-            return 0;
-        }
+    if(!write_cmd_check_ack(m_punIOBuffer, 38)) {
+       return false;
+    }
 #ifdef DEBUG
         fprintf(Firmware::GetInstance().m_psTUART, "Target init sent\r\n");
 #endif
-    }
-
-#ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psTUART, "Waiting 10\r\n");
-#endif
-
     read_dt(m_punIOBuffer, 24);
 
     if(m_punIOBuffer[5] != PN532_PN532TOHOST){
-        return 0;
+        return false;
     }
 
     if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::TGINITASTARGET)) {
@@ -238,14 +227,13 @@ uint8_t CNFCController::P2PTargetInit()
         puthex(m_punIOBuffer, m_punIOBuffer[3] + 7);
         fprintf(Firmware::GetInstance().m_psTUART, "Target init fail\r\n");
 #endif
-        return 0;
+        return false;
     }
 
-    send_flag = 1;
 #ifdef DEBUG
     fprintf(Firmware::GetInstance().m_psTUART, "TgInitAsTarget read success\r\n");
 #endif
-    return 1;
+    return true;
 }
 
 /*****************************************************************************/
@@ -387,28 +375,6 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    }
    /* return the number of bytes in the rx buffer (or maximum buffer capacity) */
    return (unRxDataLength > un_rx_buffer_len) ? un_rx_buffer_len : unRxDataLength;
-}
-
-/*****************************************************************************/
-/*!
-	@brief  PN532 SetParameters command. Details in NXP's PN532UM.pdf
-	@param  para - parameter to set
-	@return 0 - send failed
-            1 - send successfully
-*/
-/*****************************************************************************/
-bool CNFCController::SetParameters(uint8_t un_param) {
-   m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::SETPARAMETERS);
-   m_punIOBuffer[1] = un_param;
-
-   if(!write_cmd_check_ack(m_punIOBuffer, 2)){
-      return false;
-   }
-   read_dt(m_punIOBuffer, 8);
-   if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::SETPARAMETERS)) {
-      return false;
-   }
-   return true;
 }
 
 /*****************************************************************************/

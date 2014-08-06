@@ -129,22 +129,11 @@ bool Firmware::InitXbee() {
 bool Firmware::InitPN532() {
    bool bNFCInitSuccess = false;
    if(m_cNFCController.Probe() == true) {
-      //fprintf(m_psHUART, "Found NFC controller\r\n");
       if(m_cNFCController.ConfigureSAM() == true) {
-         //fprintf(m_psHUART, "SAM configured\r\n");
          if(m_cNFCController.PowerDown() == true) {
             bNFCInitSuccess = true;
          }
-         else {
-            //fprintf(m_psHUART, "Failed to enter power down mode\r\n");
-         }
-      }
-      else {
-         //fprintf(m_psHUART, "Unable to configure SAM\r\n");
-      }
-   }
-   else {
-      //fprintf(m_psHUART, "NFC controller not detected\r\n");
+      }    
    }
    fprintf(m_psHUART, "NFC Init %s\r\n",bNFCInitSuccess?"passed":"failed");
 
@@ -237,6 +226,141 @@ bool Firmware::InitPCA9635() {
    return true;
 }
 
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::TestAccelerometer() {
+   /* Array for holding accelerometer result */
+   uint8_t punMPU6050Res[8];
+
+   Firmware::GetInstance().GetTWController().BeginTransmission(MPU6050_ADDR);
+   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EMPU6050Register::ACCEL_XOUT_H));
+   Firmware::GetInstance().GetTWController().EndTransmission(false);
+   Firmware::GetInstance().GetTWController().Read(MPU6050_ADDR, 8, true);
+   /* Read the requested 8 bytes */
+   for(uint8_t i = 0; i < 8; i++) {
+      punMPU6050Res[i] = Firmware::GetInstance().GetTWController().Read();
+   }
+   fprintf(m_psTUART, 
+           "Acc[x] = %i\r\n"
+           "Acc[y] = %i\r\n"
+           "Acc[z] = %i\r\n"
+           "Temp = %i\r\n",
+           int16_t((punMPU6050Res[0] << 8) | punMPU6050Res[1]),
+           int16_t((punMPU6050Res[2] << 8) | punMPU6050Res[3]),
+           int16_t((punMPU6050Res[4] << 8) | punMPU6050Res[5]),
+           (int16_t((punMPU6050Res[6] << 8) | punMPU6050Res[7]) + 12412) / 340);  
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::TestPMIC() {
+   fprintf(m_psTUART,
+           "Power Connected = %c\r\nCharging = %c\r\n",
+           (PIND & PWR_MON_PGOOD)?'F':'T',
+           (PIND & PWR_MON_CHG)?'F':'T');
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::TestLEDs() {
+   /* correctly connected LEDs for testing */
+   uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
+
+   m_cPortController.SelectPort(CPortController::EPort::EAST);
+   /* issue - enable port */
+   m_cPortController.DisablePort(CPortController::EPort::EAST);
+   for(uint8_t un_led_idx = 0; un_led_idx < 6; un_led_idx++) {
+      for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
+         m_cTimer.Delay(1);
+         PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+      }
+      for(uint8_t un_val = 0xFF; un_val > 0x00; un_val--) {
+         m_cTimer.Delay(1);
+         PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+      }
+   }
+   /* issue - disable port */
+   m_cPortController.EnablePort(CPortController::EPort::EAST);
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::TestNFCTx() {
+   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','1'};
+   uint8_t punInboundBuffer[20];
+   uint8_t unRxCount = 0;
+
+   fprintf(m_psTUART, "\r\nTesting NFC TX\r\n");           
+   m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+   unRxCount = 0;
+   if(m_cNFCController.P2PInitiatorInit()) {
+      fprintf(m_psTUART, "\r\nConnected!\r\n");
+      unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
+                                                    10,
+                                                    punInboundBuffer,
+                                                    20);
+      if(unRxCount > 0) {
+         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+         for(uint8_t i = 0; i < unRxCount; i++) {
+            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+         }
+         fprintf(m_psTUART, "\r\n");
+      }
+      else {
+         fprintf(m_psTUART, "No data\r\n");
+      }
+   }
+   m_cNFCController.PowerDown();
+   /* Once an response for a command is ready, an interrupt is generated
+      The last interrupt for the power down reply is cleared here */
+   m_cTimer.Delay(100);
+   m_cPortController.ClearInterrupts();
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::TestNFCRx() {
+   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','1'};
+   uint8_t punInboundBuffer[20];
+   uint8_t unRxCount = 0;
+
+   fprintf(m_psTUART, "\r\nTesting NFC RX\r\n");
+   m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+   if(m_cNFCController.P2PTargetInit()) {
+      fprintf(m_psTUART, "\r\nConnected!\r\n");
+      unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
+                                                 10,
+                                                 punInboundBuffer,
+                                                 20);
+      if(unRxCount > 0) {
+         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+         for(uint8_t i = 0; i < unRxCount; i++) {
+            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+         }
+         fprintf(m_psTUART, "\r\n");
+      }
+      else {
+         fprintf(m_psTUART, "No data\r\n");
+      }
+   }
+   /* This delay is important - entering power down too soon causes issues
+      with future communication */
+   m_cTimer.Delay(60);
+   m_cNFCController.PowerDown();
+   /* Once an response for a command is ready, an interrupt is generated
+      The last interrupt for the power down reply is cleared here */
+   m_cTimer.Delay(100);
+   m_cPortController.ClearInterrupts();
+}
+
+/***********************************************************/
+/***********************************************************/
+
 void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
    /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::LEDOUT0) + (un_led / 4u);
@@ -258,6 +382,9 @@ void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
    Firmware::GetInstance().GetTWController().Write(unRegisterVal);
    Firmware::GetInstance().GetTWController().EndTransmission(true);
 }
+
+/***********************************************************/
+/***********************************************************/
 
 void Firmware::PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val) {
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::PWM0) + un_led;
