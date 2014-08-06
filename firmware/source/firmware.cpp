@@ -12,11 +12,13 @@ int main(void)
    /* Set up FILE structs for fprintf */                           
    fdev_setup_stream(&tuart,
                      [](char c_to_write, FILE* pf_stream) {
-                        Firmware::GetInstance().GetTUARTController().Write(c_to_write);
+                        //Firmware::GetInstance().GetTUARTController().Write(c_to_write);
+                        Firmware::GetInstance().GetHUARTController().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        return int(Firmware::GetInstance().GetTUARTController().Read());
+                        return int(Firmware::GetInstance().GetHUARTController().Read());
+                        //return int(Firmware::GetInstance().GetTUARTController().Read());
                      },
                      _FDEV_SETUP_RW);
  

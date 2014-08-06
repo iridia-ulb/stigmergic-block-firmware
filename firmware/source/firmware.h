@@ -165,15 +165,15 @@ public:
 
       fprintf(m_psHUART, "Init...");
 
-      InitXbee();
+      //InitXbee();
 
       InitMPU6050();
 
       /* Note: due to board issue, this actually disables the LEDs - 
          although TW should still work, disable only disables the outputs */
-      m_cPortController.EnablePort(CPortController::EPort::EAST);
-      m_cPortController.SelectPort(CPortController::EPort::EAST);
-      InitPCA9635();
+      //m_cPortController.EnablePort(CPortController::EPort::EAST);
+      //m_cPortController.SelectPort(CPortController::EPort::EAST);
+      //InitPCA9635();
 
       m_cPortController.DisablePort(CPortController::EPort::SOUTH);
       m_cTimer.Delay(50);
@@ -189,8 +189,8 @@ public:
  
 
       for(;;) {
-         if(Firmware::GetInstance().GetTUARTController().Available()) {
-            uint8_t unInput = Firmware::GetInstance().GetTUARTController().Read();
+         if(Firmware::GetInstance().GetHUARTController().Available()) {
+            uint8_t unInput = Firmware::GetInstance().GetHUARTController().Read();
             switch(unInput) {
             case 'x':
                eTestbenchState = ETestbenchState::TEST_NFC_TX;
@@ -208,7 +208,7 @@ public:
                eTestbenchState = ETestbenchState::STANDBY;
                break;
             }
-            Firmware::GetInstance().GetTUARTController().FlushInput();
+            Firmware::GetInstance().GetHUARTController().Flush();
          }
          switch(eTestbenchState) {
          case ETestbenchState::STANDBY:
@@ -285,6 +285,7 @@ public:
                      for(uint8_t i = 0; i < unRxCount; i++) {
                         fprintf(m_psTUART, "%c", punInboundBuffer[i]);
                      }
+                     fprintf(m_psTUART, "\r\n");
                      break;
                   }
                   else {
@@ -317,6 +318,7 @@ public:
                      for(uint8_t i = 0; i < unRxCount; i++) {
                         fprintf(m_psTUART, "%c", punInboundBuffer[i]);
                      }
+                     fprintf(m_psTUART, "\r\n");
                      break;
                   }
                   else {
