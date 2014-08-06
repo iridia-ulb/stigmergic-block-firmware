@@ -156,7 +156,7 @@ public:
       uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
 
       // NFC related stuff
-      uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','O','C','K','\0'};
+      uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','O','C','K'};
       uint8_t punInboundBuffer[60];
       uint8_t unRxCount = 0;
 
@@ -277,7 +277,7 @@ public:
                if(m_cNFCController.P2PInitiatorInit()) {
                   fprintf(m_psTUART, "\r\nConnected!\r\n");
                   unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
-                                                                11,
+                                                                10,
                                                                 punInboundBuffer,
                                                                 60);
                   if(unRxCount > 0) {
@@ -309,7 +309,7 @@ public:
                if(m_cNFCController.P2PTargetInit()) {
                   fprintf(m_psTUART, "\r\nConnected!\r\n");
                   unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
-                                                             11,
+                                                             10,
                                                              punInboundBuffer,
                                                              60);
                   if(unRxCount > 0) {
