@@ -12,13 +12,11 @@ int main(void)
    /* Set up FILE structs for fprintf */                           
    fdev_setup_stream(&tuart,
                      [](char c_to_write, FILE* pf_stream) {
-                        //Firmware::GetInstance().GetTUARTController().Write(c_to_write);
-                        Firmware::GetInstance().GetHUARTController().Write(c_to_write);
+                        Firmware::GetInstance().GetTUARTController().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        return int(Firmware::GetInstance().GetHUARTController().Read());
-                        //return int(Firmware::GetInstance().GetTUARTController().Read());
+                        return int(Firmware::GetInstance().GetTUARTController().Read());
                      },
                      _FDEV_SETUP_RW);
  
@@ -290,15 +288,15 @@ void Firmware::TestLEDs() {
 /***********************************************************/
 
 void Firmware::TestNFCTx() {
-   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','1'};
+   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','2'};
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psTUART, "\r\nTesting NFC TX\r\n");           
+   fprintf(m_psTUART, "Testing NFC TX\r\n");           
    m_cPortController.SelectPort(CPortController::EPort::SOUTH);
    unRxCount = 0;
    if(m_cNFCController.P2PInitiatorInit()) {
-      fprintf(m_psTUART, "\r\nConnected!\r\n");
+      fprintf(m_psTUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
                                                     10,
                                                     punInboundBuffer,
@@ -325,14 +323,14 @@ void Firmware::TestNFCTx() {
 /***********************************************************/
 
 void Firmware::TestNFCRx() {
-   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','1'};
+   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','2'};
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psTUART, "\r\nTesting NFC RX\r\n");
+   fprintf(m_psTUART, "Testing NFC RX\r\n");
    m_cPortController.SelectPort(CPortController::EPort::SOUTH);
    if(m_cNFCController.P2PTargetInit()) {
-      fprintf(m_psTUART, "\r\nConnected!\r\n");
+      fprintf(m_psTUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
                                                  10,
                                                  punInboundBuffer,

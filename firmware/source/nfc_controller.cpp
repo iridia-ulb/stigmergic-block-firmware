@@ -2,8 +2,6 @@
 
 #include "nfc_controller.h"
 
-#define DEBUG
-
 uint8_t ack[6]={
     0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00
 };
@@ -89,7 +87,6 @@ bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_us
     if(!write_cmd_check_ack(m_punIOBuffer, 4)){
        return false;
     }
-
     /* read response */
     read_dt(m_punIOBuffer, 8);
     /* return whether the reply was as expected */
@@ -105,8 +102,7 @@ bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_us
             1 - successfully
 */
 /*****************************************************************************/
-bool CNFCController::P2PInitiatorInit()
-{
+bool CNFCController::P2PInitiatorInit() {
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INJUMPFORDEP);
     m_punIOBuffer[1] = 0x01; // avtive mode
     m_punIOBuffer[2] = 0x02; // 201Kbps
@@ -161,8 +157,7 @@ bool CNFCController::P2PInitiatorInit()
             1 - successfully
 */
 /*****************************************************************************/
-bool CNFCController::P2PTargetInit()
-{
+bool CNFCController::P2PTargetInit() {
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::TGINITASTARGET);
     /** 14443-4A Card only */
     m_punIOBuffer[1] = 0x00;
@@ -506,7 +501,7 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
    uint8_t unStatus = PN532_I2C_BUSY;
    // attempt to read response twenty times
-   for(uint8_t i = 0; i < 20; i++) {
+   for(uint8_t i = 0; i < 25; i++) {
       Firmware::GetInstance().GetTimer().Delay(10);
       // Start read (n+1 to take into account leading 0x01 with I2C)
       Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);

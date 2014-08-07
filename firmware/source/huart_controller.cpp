@@ -187,8 +187,7 @@ int HardwareSerial::Read(void)
 /****************************************/
 /****************************************/
 
-void HardwareSerial::Flush()
-{
+void HardwareSerial::Flush() {
   // UDR is kept full while the buffer is not empty, so TXC triggers when EMPTY && SENT
   while (transmitting && ! (*_ucsra & _BV(TXC0)));
   transmitting = false;
@@ -197,8 +196,7 @@ void HardwareSerial::Flush()
 /****************************************/
 /****************************************/
 
-uint8_t HardwareSerial::Write(uint8_t c)
-{
+uint8_t HardwareSerial::Write(uint8_t c) {
   unsigned int i = (_tx_buffer->head + 1) % SERIAL_BUFFER_SIZE;
 	
   // If the output buffer is full, there's nothing for it other than to 

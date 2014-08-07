@@ -144,14 +144,14 @@ public:
    int Exec() {
       fprintf(m_psHUART, "Init...");
 
-      //InitXbee();
+      InitXbee();
       InitMPU6050();
 
       /* Note: due to board issue, this actually disables the LEDs - 
          although TW should still work, disable only disables the outputs */
-      //m_cPortController.EnablePort(CPortController::EPort::EAST);
-      //m_cPortController.SelectPort(CPortController::EPort::EAST);
-      //InitPCA9635();
+      m_cPortController.EnablePort(CPortController::EPort::EAST);
+      m_cPortController.SelectPort(CPortController::EPort::EAST);
+      InitPCA9635();
 
       m_cPortController.DisablePort(CPortController::EPort::SOUTH);
       m_cTimer.Delay(50);
@@ -166,11 +166,11 @@ public:
       uint8_t unInput = 0;
 
       for(;;) {
-         if(Firmware::GetInstance().GetHUARTController().Available()) {
-            unInput = Firmware::GetInstance().GetHUARTController().Read();
+         if(Firmware::GetInstance().GetTUARTController().Available()) {
+            unInput = Firmware::GetInstance().GetTUARTController().Read();
             /* flush */
-            while(Firmware::GetInstance().GetHUARTController().Available()) {
-               Firmware::GetInstance().GetHUARTController().Read();
+            while(Firmware::GetInstance().GetTUARTController().Available()) {
+               Firmware::GetInstance().GetTUARTController().Read();
             }
          }
          else {
