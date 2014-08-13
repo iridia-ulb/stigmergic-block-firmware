@@ -37,6 +37,8 @@ public:
    void DisablePort(EPort e_disable);
    void SelectPort(EPort e_select);
 
+   bool IsPortConnected();
+
 private:
    enum class EPCA9554Register : uint8_t {
       INPUT          = 0x00, // R

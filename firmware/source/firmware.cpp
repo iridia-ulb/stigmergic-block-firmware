@@ -362,18 +362,15 @@ void Firmware::TestNFCRx() {
 void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
    /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::LEDOUT0) + (un_led / 4u);
-
    /* read current register value */
    Firmware::GetInstance().GetTWController().BeginTransmission(PCA9635_ADDR);
    Firmware::GetInstance().GetTWController().Write(unRegisterAddr);
    Firmware::GetInstance().GetTWController().EndTransmission(false);
    Firmware::GetInstance().GetTWController().Read(PCA9635_ADDR, 1, true);
    uint8_t unRegisterVal = Firmware::GetInstance().GetTWController().Read();
-
    /* clear and set target bits in unRegisterVal */
-   unRegisterVal &= (LEDOUTX_MASK << ((un_led % 4) * 2));
+   unRegisterVal &= ~(LEDOUTX_MASK << ((un_led % 4) * 2));
    unRegisterVal |= (static_cast<uint8_t>(e_mode) << ((un_led % 4) * 2));
-
    /* write back */
    Firmware::GetInstance().GetTWController().BeginTransmission(PCA9635_ADDR);
    Firmware::GetInstance().GetTWController().Write(unRegisterAddr);
@@ -385,13 +382,13 @@ void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
 /***********************************************************/
 
 void Firmware::PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val) {
+   /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::PWM0) + un_led;
-
+   /* write value */
    Firmware::GetInstance().GetTWController().BeginTransmission(PCA9635_ADDR);
    Firmware::GetInstance().GetTWController().Write(unRegisterAddr);
    Firmware::GetInstance().GetTWController().Write(un_val);
    Firmware::GetInstance().GetTWController().EndTransmission(true);
-
    /* Ensure that the LED is in PWM mode */
    PCA9635_SetLEDMode(un_led, EPCA9635LEDMode::PWM);
 }

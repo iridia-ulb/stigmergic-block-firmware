@@ -144,6 +144,27 @@ public:
    int Exec() {
       fprintf(m_psHUART, "Init...");
 
+      m_cPortController.SelectPort(CPortController::EPort::NORTH);
+      fprintf(m_psHUART, "N:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      m_cPortController.SelectPort(CPortController::EPort::EAST);
+      fprintf(m_psHUART, "E:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+      fprintf(m_psHUART, "S:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      m_cPortController.SelectPort(CPortController::EPort::WEST);
+      fprintf(m_psHUART, "W:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      m_cPortController.SelectPort(CPortController::EPort::TOP);
+      fprintf(m_psHUART, "T:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
+      fprintf(m_psHUART, "B:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
+
+      // Select a connected port
+      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+
       InitXbee();
       InitMPU6050();
 

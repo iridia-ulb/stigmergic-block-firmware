@@ -3,6 +3,9 @@
 #include <avr/io.h>
 #include <firmware.h>
 
+#define NUM_FACES 6
+#define PORTC_TW_MASK 0x30
+
 CPortController::CPortInterrupt::CPortInterrupt(CPortController* pc_port_controller, uint8_t un_intr_vect_num) :
    m_pcPortController(pc_port_controller) {
    Register(this, un_intr_vect_num);
@@ -26,10 +29,10 @@ CPortController::CPortController() :
 
    /* Configure the port TW multiplexer */
    DDRC |= PORT_CTRL_MASK;
-   PORTC &= ~PORT_CTRL_MASK;
 
    /* Disable all ports initially */
-   /* Safe state, since selected a non-connected face results in stalling the tw bus */
+   /* Safe state, since selected a non-connected face results in stalling the tw bus on R/W */
+   PORTC &= ~PORT_CTRL_MASK;
    PORTC |= 8 & PORT_CTRL_MASK;
 }
 
@@ -133,3 +136,12 @@ void CPortController::SelectPort(EPort e_target_port) {
    PORTC |= static_cast<uint8_t>(e_target_port) & PORT_CTRL_MASK;
 }
 
+/***********************************************************/
+/***********************************************************/
+
+/* This function detects if the selected port in connected, 
+   via testing the pull up resistors */
+bool CPortController::IsPortConnected() {
+   // Lock TWController before doing test
+   return ((PINC & PORTC_TW_MASK) != 0);
+}
