@@ -239,7 +239,7 @@ void Firmware::TestAccelerometer() {
    for(uint8_t i = 0; i < 8; i++) {
       punMPU6050Res[i] = Firmware::GetInstance().GetTWController().Read();
    }
-   fprintf(m_psTUART, 
+   fprintf(m_psHUART, 
            "Acc[x] = %i\r\n"
            "Acc[y] = %i\r\n"
            "Acc[z] = %i\r\n"
@@ -254,7 +254,7 @@ void Firmware::TestAccelerometer() {
 /***********************************************************/
 
 void Firmware::TestPMIC() {
-   fprintf(m_psTUART,
+   fprintf(m_psHUART,
            "Power Connected = %c\r\nCharging = %c\r\n",
            (PIND & PWR_MON_PGOOD)?'F':'T',
            (PIND & PWR_MON_CHG)?'F':'T');
@@ -265,12 +265,12 @@ void Firmware::TestPMIC() {
 
 void Firmware::TestLEDs() {
    /* correctly connected LEDs for testing */
-   uint8_t punLEDIdx[6] = {0,1,2, 12, 11, 10};
+   uint8_t punLEDIdx[] = {0,1,2,4,5,6,8,9,10,12,13,14};
 
    m_cPortController.SelectPort(CPortController::EPort::EAST);
    /* issue - enable port */
-   m_cPortController.DisablePort(CPortController::EPort::EAST);
-   for(uint8_t un_led_idx = 0; un_led_idx < 6; un_led_idx++) {
+   m_cPortController.EnablePort(CPortController::EPort::EAST);
+   for(uint8_t un_led_idx = 0; un_led_idx < sizeof(punLEDIdx); un_led_idx++) {
       for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
          m_cTimer.Delay(1);
          PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
@@ -281,7 +281,7 @@ void Firmware::TestLEDs() {
       }
    }
    /* issue - disable port */
-   m_cPortController.EnablePort(CPortController::EPort::EAST);
+   m_cPortController.DisablePort(CPortController::EPort::EAST);
 }
 
 /***********************************************************/
@@ -292,24 +292,24 @@ void Firmware::TestNFCTx() {
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psTUART, "Testing NFC TX\r\n");           
-   m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+   fprintf(m_psHUART, "Testing NFC TX\r\n");           
+   m_cPortController.SelectPort(CPortController::EPort::EAST);
    unRxCount = 0;
    if(m_cNFCController.P2PInitiatorInit()) {
-      fprintf(m_psTUART, "Connected!\r\n");
+      fprintf(m_psHUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
                                                     10,
                                                     punInboundBuffer,
                                                     20);
       if(unRxCount > 0) {
-         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+         fprintf(m_psHUART, "Received %i bytes: ", unRxCount);
          for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+            fprintf(m_psHUART, "%c", punInboundBuffer[i]);
          }
-         fprintf(m_psTUART, "\r\n");
+         fprintf(m_psHUART, "\r\n");
       }
       else {
-         fprintf(m_psTUART, "No data\r\n");
+         fprintf(m_psHUART, "No data\r\n");
       }
    }
    m_cNFCController.PowerDown();
@@ -327,23 +327,23 @@ void Firmware::TestNFCRx() {
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psTUART, "Testing NFC RX\r\n");
-   m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+   fprintf(m_psHUART, "Testing NFC RX\r\n");
+   m_cPortController.SelectPort(CPortController::EPort::EAST);
    if(m_cNFCController.P2PTargetInit()) {
-      fprintf(m_psTUART, "Connected!\r\n");
+      fprintf(m_psHUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
                                                  10,
                                                  punInboundBuffer,
                                                  20);
       if(unRxCount > 0) {
-         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
+         fprintf(m_psHUART, "Received %i bytes: ", unRxCount);
          for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
+            fprintf(m_psHUART, "%c", punInboundBuffer[i]);
          }
-         fprintf(m_psTUART, "\r\n");
+         fprintf(m_psHUART, "\r\n");
       }
       else {
-         fprintf(m_psTUART, "No data\r\n");
+         fprintf(m_psHUART, "No data\r\n");
       }
    }
    /* This delay is important - entering power down too soon causes issues

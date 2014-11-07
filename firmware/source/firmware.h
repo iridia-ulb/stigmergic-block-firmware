@@ -23,7 +23,7 @@
 /* I2C Address Space */
 #define MPU6050_ADDR               0x68
 #define LTC2990_ADDR               0x4C
-#define PCA9635_ADDR               0x15
+#define PCA9635_ADDR               0x18
 #define PCA9635_RST                0x03
 
 enum class EMPU6050Register : uint8_t {
@@ -162,36 +162,26 @@ public:
       m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
       fprintf(m_psHUART, "B:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
 
-      // Select a connected port
-      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
-
-      InitXbee();
-      InitMPU6050();
-
-      /* Note: due to board issue, this actually disables the LEDs - 
-         although TW should still work, disable only disables the outputs */
-      m_cPortController.EnablePort(CPortController::EPort::EAST);
       m_cPortController.SelectPort(CPortController::EPort::EAST);
+
+      //InitXbee();
+      InitMPU6050();
       InitPCA9635();
 
-      m_cPortController.DisablePort(CPortController::EPort::SOUTH);
-      m_cTimer.Delay(50);
-      m_cPortController.EnablePort(CPortController::EPort::SOUTH);
-      m_cTimer.Delay(50);
-      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+      /* port needs to be enabled for NFC init to work */
+      m_cPortController.EnablePort(CPortController::EPort::EAST);
       while(!InitPN532()) {
          m_cTimer.Delay(500);
-         fprintf(m_psHUART, ".");
       }
 
       uint8_t unInput = 0;
 
       for(;;) {
-         if(Firmware::GetInstance().GetTUARTController().Available()) {
-            unInput = Firmware::GetInstance().GetTUARTController().Read();
+         if(Firmware::GetInstance().GetHUARTController().Available()) {
+            unInput = Firmware::GetInstance().GetHUARTController().Read();
             /* flush */
-            while(Firmware::GetInstance().GetTUARTController().Available()) {
-               Firmware::GetInstance().GetTUARTController().Read();
+            while(Firmware::GetInstance().GetHUARTController().Available()) {
+               Firmware::GetInstance().GetHUARTController().Read();
             }
          }
          else {
@@ -212,12 +202,12 @@ public:
             TestPMIC();
             break;
          case 'u':
-            fprintf(m_psTUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
+            fprintf(m_psHUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
             break;
          default:
             m_cPortController.SynchronizeInterrupts();
             if(m_cPortController.HasInterrupts()) {
-               fprintf(m_psTUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
+               fprintf(m_psHUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
                m_cPortController.ClearInterrupts();
                TestNFCRx();
             }
