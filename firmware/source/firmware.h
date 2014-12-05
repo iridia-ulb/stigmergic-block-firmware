@@ -18,6 +18,7 @@
 #include <tw_controller.h>
 #include <nfc_controller.h>
 #include <port_controller.h>
+#include <adc_controller.h>
 #include <timer.h>
 
 /* I2C Address Space */
@@ -141,81 +142,7 @@ public:
       return m_cTimer;
    }
 
-   int Exec() {
-      fprintf(m_psHUART, "Init...");
-
-      m_cPortController.SelectPort(CPortController::EPort::NORTH);
-      fprintf(m_psHUART, "N:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::EAST);
-      fprintf(m_psHUART, "E:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::SOUTH);
-      fprintf(m_psHUART, "S:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::WEST);
-      fprintf(m_psHUART, "W:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::TOP);
-      fprintf(m_psHUART, "T:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
-      fprintf(m_psHUART, "B:%c\r\n", m_cPortController.IsPortConnected()?'T':'F');
-
-      m_cPortController.SelectPort(CPortController::EPort::EAST);
-
-      //InitXbee();
-      InitMPU6050();
-      InitPCA9635();
-
-      /* port needs to be enabled for NFC init to work */
-      m_cPortController.EnablePort(CPortController::EPort::EAST);
-      while(!InitPN532()) {
-         m_cTimer.Delay(500);
-      }
-
-      uint8_t unInput = 0;
-
-      for(;;) {
-         if(Firmware::GetInstance().GetHUARTController().Available()) {
-            unInput = Firmware::GetInstance().GetHUARTController().Read();
-            /* flush */
-            while(Firmware::GetInstance().GetHUARTController().Available()) {
-               Firmware::GetInstance().GetHUARTController().Read();
-            }
-         }
-         else {
-            unInput = 0;
-         }
-
-         switch(unInput) {
-         case 'a':
-            TestAccelerometer();
-            break;
-         case 'l':
-            TestLEDs();
-            break;
-         case 't':
-            TestNFCTx();
-            break;
-         case 'p':
-            TestPMIC();
-            break;
-         case 'u':
-            fprintf(m_psHUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
-            break;
-         default:
-            m_cPortController.SynchronizeInterrupts();
-            if(m_cPortController.HasInterrupts()) {
-               fprintf(m_psHUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
-               m_cPortController.ClearInterrupts();
-               TestNFCRx();
-            }
-            break;
-         }
-      }
-      return 0;
-   }
+   int Exec();
       
 private:
 
@@ -225,12 +152,17 @@ private:
    bool InitPCA9635();
    bool InitPN532();
 
+   void DetectFaces();
+
    /* Test Routines */
    void TestAccelerometer();
    void TestPMIC();
    void TestLEDs();
    void TestNFCTx();
    void TestNFCRx();
+
+   /* Reset */
+   void Reset();
 
    /* LED commands */
    void PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode);
@@ -290,7 +222,14 @@ private:
 
    CNFCController m_cNFCController;
 
+   CADCController m_cADCController;
+
    static Firmware _firmware;
+   
+   CPortController::EPort peConnectedPorts[6];
+
+   uint8_t unConnectedPortsIdx = 0;
+
 
 public: // TODO, don't make these public
     /* File structs for fprintf */

@@ -263,26 +263,59 @@ void Firmware::TestPMIC() {
 /***********************************************************/
 /***********************************************************/
 
-void Firmware::TestLEDs() {
-   /* correctly connected LEDs for testing */
-   uint8_t punLEDIdx[] = {0,1,2,4,5,6,8,9,10,12,13,14};
+//peConnectedPorts[unPortIdx]
 
-   m_cPortController.SelectPort(CPortController::EPort::EAST);
-   /* issue - enable port */
-   m_cPortController.EnablePort(CPortController::EPort::EAST);
-   for(uint8_t un_led_idx = 0; un_led_idx < sizeof(punLEDIdx); un_led_idx++) {
-      for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
-         m_cTimer.Delay(1);
-         PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+void Firmware::TestLEDs() {
+   for(uint8_t unVal = 0x00; unVal < 0xFF; unVal++) {
+      for(uint8_t unPortIdx = 0; unPortIdx < unConnectedPortsIdx; unPortIdx++) {
+         m_cPortController.SelectPort(peConnectedPorts[unPortIdx]);
+         m_cPortController.EnablePort(peConnectedPorts[unPortIdx]);
+         for(uint8_t unColor = 0; unColor < 3; unColor++) {
+            PCA9635_SetLEDBrightness(unColor + 0, unVal);
+            PCA9635_SetLEDBrightness(unColor + 4, unVal);
+            PCA9635_SetLEDBrightness(unColor + 8, unVal);
+            PCA9635_SetLEDBrightness(unColor + 12, unVal);
+         }
       }
-      for(uint8_t un_val = 0xFF; un_val > 0x00; un_val--) {
-         m_cTimer.Delay(1);
-         PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
-      }
+      m_cTimer.Delay(1);
    }
-   /* issue - disable port */
-   m_cPortController.DisablePort(CPortController::EPort::EAST);
+   for(uint8_t unVal = 0xFF; unVal > 0x00; unVal--) {
+      for(uint8_t unPortIdx = 0; unPortIdx < unConnectedPortsIdx; unPortIdx++) {
+         m_cPortController.SelectPort(peConnectedPorts[unPortIdx]);
+         m_cPortController.EnablePort(peConnectedPorts[unPortIdx]);
+         for(uint8_t unColor = 0; unColor < 3; unColor++) {
+            PCA9635_SetLEDBrightness(unColor + 0, unVal);
+            PCA9635_SetLEDBrightness(unColor + 4, unVal);
+            PCA9635_SetLEDBrightness(unColor + 8, unVal);
+            PCA9635_SetLEDBrightness(unColor + 12, unVal);
+         }
+      }
+      m_cTimer.Delay(1);
+   }
 }
+
+/***********************************************************/
+/***********************************************************/
+
+// void Firmware::TestLEDs() {
+//    /* correctly connected LEDs for testing */
+//    uint8_t punLEDIdx[] = {0,1,2,4,5,6,8,9,10,12,13,14};
+
+//    m_cPortController.SelectPort(CPortController::EPort::EAST);
+//    m_cPortController.EnablePort(CPortController::EPort::EAST);
+//    for(uint8_t un_led_idx = 0; un_led_idx < sizeof(punLEDIdx); un_led_idx++) {
+//       for(uint8_t un_val = 0x00; un_val < 0xFF; un_val++) {
+//          m_cTimer.Delay(1);
+//          PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+//       }
+//       for(uint8_t un_val = 0xFF; un_val > 0x00; un_val--) {
+//          m_cTimer.Delay(1);
+//          PCA9635_SetLEDBrightness(punLEDIdx[un_led_idx], un_val);
+//       }
+//    }
+//    /* issue - disable port */
+//    m_cPortController.DisablePort(CPortController::EPort::EAST);
+// }
 
 /***********************************************************/
 /***********************************************************/
@@ -359,6 +392,58 @@ void Firmware::TestNFCRx() {
 /***********************************************************/
 /***********************************************************/
 
+void Firmware::Reset() {
+   PORTD |= 0x10;
+   DDRD |= 0x10;
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::DetectFaces() {
+   fprintf(m_psHUART, "Connected Ports: ");
+
+   m_cPortController.SelectPort(CPortController::EPort::NORTH);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::NORTH;
+      fprintf(m_psHUART, "N, ");
+   }
+
+   m_cPortController.SelectPort(CPortController::EPort::EAST);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::EAST;
+      fprintf(m_psHUART, "E, ");
+   }
+
+   m_cPortController.SelectPort(CPortController::EPort::SOUTH);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::SOUTH;
+      fprintf(m_psHUART, "S, ");
+   }
+
+   m_cPortController.SelectPort(CPortController::EPort::WEST);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::WEST;
+      fprintf(m_psHUART, "W, ");
+   }
+
+   m_cPortController.SelectPort(CPortController::EPort::TOP);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::TOP;
+      fprintf(m_psHUART, "T, ");
+   }
+
+   m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
+   if(m_cPortController.IsPortConnected()) {
+      peConnectedPorts[unConnectedPortsIdx++] = CPortController::EPort::BOTTOM;
+      fprintf(m_psHUART, "B, ");
+   }
+   fprintf(m_psHUART, "\b\b\r\n");
+}
+
+/***********************************************************/
+/***********************************************************/
+
 void Firmware::PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode) {
    /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(EPCA9635Register::LEDOUT0) + (un_led / 4u);
@@ -391,6 +476,84 @@ void Firmware::PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val) {
    Firmware::GetInstance().GetTWController().EndTransmission(true);
    /* Ensure that the LED is in PWM mode */
    PCA9635_SetLEDMode(un_led, EPCA9635LEDMode::PWM);
+}
+
+/***********************************************************/
+/***********************************************************/
+
+int Firmware::Exec() {
+
+   /* TODO move this detection routine inside the port controller class, provide .begin() .end() and operator++ methods for iteration over all ports i.e. GetConnectedPorts.Begin() */
+
+   //m_cPortController.SelectPort(CPortController::EPort::EAST);
+   DetectFaces();
+   //InitXbee();
+   //InitMPU6050();
+
+   // for all connected ports, init pca9635, pn532
+   for(uint8_t unPortIdx = 0; unPortIdx < unConnectedPortsIdx; unPortIdx++) {
+      m_cPortController.SelectPort(peConnectedPorts[unPortIdx]);
+      InitPCA9635();
+   }
+
+   // CSmartblockOS::CreateThread(CSmartblockEastFace);
+
+   /* port needs to be enabled for NFC init to work */
+   //m_cPortController.EnablePort(CPortController::EPort::EAST);
+   //while(!InitPN532()) {
+   //   m_cTimer.Delay(500);
+   //}
+
+   uint8_t unInput = 0;
+
+   for(;;) {
+      if(Firmware::GetInstance().GetHUARTController().Available()) {
+         unInput = Firmware::GetInstance().GetHUARTController().Read();
+         /* flush */
+         while(Firmware::GetInstance().GetHUARTController().Available()) {
+            Firmware::GetInstance().GetHUARTController().Read();
+         }
+      }
+      else {
+         unInput = 0;
+      }
+
+      switch(unInput) {
+      case 'a':
+         TestAccelerometer();
+         break;
+      case 'b':
+         // assumes divider with 330k and 1M
+         fprintf(m_psHUART,
+                 "Battery = %umV\r\n", 
+                 m_cADCController.GetValue(CADCController::EChannel::ADC7) * 17);
+         break;
+      case 'l':
+         TestLEDs();
+         break;
+      case 'r':
+         Reset();
+         break;
+      case 't':
+         TestNFCTx();
+         break;
+      case 'p':
+         TestPMIC();
+         break;
+      case 'u':
+         fprintf(m_psHUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
+         break;
+      default:
+         m_cPortController.SynchronizeInterrupts();
+         if(m_cPortController.HasInterrupts()) {
+            fprintf(m_psHUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
+            m_cPortController.ClearInterrupts();
+            TestNFCRx();
+         }
+         break;
+      }
+   }
+   return 0;
 }
 
 
