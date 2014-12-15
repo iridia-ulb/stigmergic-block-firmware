@@ -134,6 +134,7 @@ void CPortController::DisablePort(EPort e_target_port) {
 void CPortController::SelectPort(EPort e_target_port) {
    PORTC &= ~PORT_CTRL_MASK;
    PORTC |= static_cast<uint8_t>(e_target_port) & PORT_CTRL_MASK;
+   Firmware::GetInstance().GetTimer().Delay(100);
 }
 
 /***********************************************************/

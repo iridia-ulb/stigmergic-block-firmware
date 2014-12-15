@@ -70,6 +70,7 @@ bool Firmware::InitXbee() {
    while(bInitInProgress) {
       switch(eInitXbeeState) {
       case EInitXbeeState::RESET:
+         fprintf(m_psHUART, "XBEE RESET\r\n");
          PORTD &= ~XBEE_RST_PIN; // drive xbee reset pin low (enable)
          DDRD |= XBEE_RST_PIN;   // set xbee reset pin as output
          m_cTimer.Delay(50);
@@ -79,6 +80,7 @@ bool Firmware::InitXbee() {
          continue;
          break;
       case EInitXbeeState::CONFIG_TX: 
+         fprintf(m_psHUART, "CONFIG_TX\r\n");
          for(uint8_t unCmdCharIdx = 0;
              ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\0';
              unCmdCharIdx++) {
@@ -89,7 +91,8 @@ bool Firmware::InitXbee() {
          unTimeout = 0;
          continue;
          break;
-      case EInitXbeeState::CONFIG_WAIT_FOR_RX:
+      case EInitXbeeState::CONFIG_WAIT_FOR_RX: // RX_ACK
+         fprintf(m_psHUART, "CONFIG_WAIT_FOR_RX\r\n");
          m_cTimer.Delay(250);
          while(m_cTUARTController.Available() && sRxBuffer.Index < 8) {
             sRxBuffer.Buffer[sRxBuffer.Index++] = m_cTUARTController.Read();
@@ -133,7 +136,7 @@ bool Firmware::InitPN532() {
          }
       }    
    }
-   fprintf(m_psHUART, "NFC Init %s\r\n",bNFCInitSuccess?"passed":"failed");
+   fprintf(m_psTUART, "NFC Init %s\r\n",bNFCInitSuccess?"passed":"failed");
 
    return bNFCInitSuccess;
 }
@@ -194,9 +197,9 @@ bool Firmware::InitMPU6050() {
          /* select internal clock, disable sleep/cycle mode, enable temperature sensor*/
          Firmware::GetInstance().GetTWController().Write(0x00);
          Firmware::GetInstance().GetTWController().EndTransmission(true);
-#ifdef DEBUG
+
          fprintf(m_psHUART, "MPU6050 Configuration: SUCCESS\r\n");
-#endif
+
          bInitInProgress = false;
          continue;
          break;
@@ -239,7 +242,7 @@ void Firmware::TestAccelerometer() {
    for(uint8_t i = 0; i < 8; i++) {
       punMPU6050Res[i] = Firmware::GetInstance().GetTWController().Read();
    }
-   fprintf(m_psHUART, 
+   fprintf(m_psTUART, 
            "Acc[x] = %i\r\n"
            "Acc[y] = %i\r\n"
            "Acc[z] = %i\r\n"
@@ -254,7 +257,7 @@ void Firmware::TestAccelerometer() {
 /***********************************************************/
 
 void Firmware::TestPMIC() {
-   fprintf(m_psHUART,
+   fprintf(m_psTUART,
            "Power Connected = %c\r\nCharging = %c\r\n",
            (PIND & PWR_MON_PGOOD)?'F':'T',
            (PIND & PWR_MON_CHG)?'F':'T');
@@ -325,24 +328,24 @@ void Firmware::TestNFCTx() {
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psHUART, "Testing NFC TX\r\n");           
+   fprintf(m_psTUART, "Testing NFC TX\r\n");           
    m_cPortController.SelectPort(CPortController::EPort::EAST);
    unRxCount = 0;
    if(m_cNFCController.P2PInitiatorInit()) {
-      fprintf(m_psHUART, "Connected!\r\n");
+      fprintf(m_psTUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
                                                     10,
                                                     punInboundBuffer,
                                                     20);
       if(unRxCount > 0) {
-         fprintf(m_psHUART, "Received %i bytes: ", unRxCount);
+         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
          for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psHUART, "%c", punInboundBuffer[i]);
+            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
          }
-         fprintf(m_psHUART, "\r\n");
+         fprintf(m_psTUART, "\r\n");
       }
       else {
-         fprintf(m_psHUART, "No data\r\n");
+         fprintf(m_psTUART, "No data\r\n");
       }
    }
    m_cNFCController.PowerDown();
@@ -360,23 +363,23 @@ void Firmware::TestNFCRx() {
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   fprintf(m_psHUART, "Testing NFC RX\r\n");
+   fprintf(m_psTUART, "Testing NFC RX\r\n");
    m_cPortController.SelectPort(CPortController::EPort::EAST);
    if(m_cNFCController.P2PTargetInit()) {
-      fprintf(m_psHUART, "Connected!\r\n");
+      fprintf(m_psTUART, "Connected!\r\n");
       unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
                                                  10,
                                                  punInboundBuffer,
                                                  20);
       if(unRxCount > 0) {
-         fprintf(m_psHUART, "Received %i bytes: ", unRxCount);
+         fprintf(m_psTUART, "Received %i bytes: ", unRxCount);
          for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psHUART, "%c", punInboundBuffer[i]);
+            fprintf(m_psTUART, "%c", punInboundBuffer[i]);
          }
-         fprintf(m_psHUART, "\r\n");
+         fprintf(m_psTUART, "\r\n");
       }
       else {
-         fprintf(m_psHUART, "No data\r\n");
+         fprintf(m_psTUART, "No data\r\n");
       }
    }
    /* This delay is important - entering power down too soon causes issues
@@ -485,17 +488,24 @@ int Firmware::Exec() {
 
    /* TODO move this detection routine inside the port controller class, provide .begin() .end() and operator++ methods for iteration over all ports i.e. GetConnectedPorts.Begin() */
 
-   //m_cPortController.SelectPort(CPortController::EPort::EAST);
+
    DetectFaces();
-   //InitXbee();
-   //InitMPU6050();
+   InitXbee();
+
+   //IMPORTANT, a valid face must be selected at this point so that the i2c bus doesn't hang (note we can also disable faces during this part of the init)
+   m_cPortController.SelectPort(CPortController::EPort::NORTH);
+   InitMPU6050();
 
    // for all connected ports, init pca9635, pn532
+   fprintf(m_psHUART, "ta = %lu\r\n", m_cTimer.GetMilliseconds());
+
    for(uint8_t unPortIdx = 0; unPortIdx < unConnectedPortsIdx; unPortIdx++) {
       m_cPortController.SelectPort(peConnectedPorts[unPortIdx]);
+      fprintf(m_psHUART, "t[%d] = %lu\r\n", unPortIdx, m_cTimer.GetMilliseconds());
       InitPCA9635();
    }
 
+   fprintf(m_psHUART, "tb = %lu\r\n", m_cTimer.GetMilliseconds());
    // CSmartblockOS::CreateThread(CSmartblockEastFace);
 
    /* port needs to be enabled for NFC init to work */
@@ -505,13 +515,14 @@ int Firmware::Exec() {
    //}
 
    uint8_t unInput = 0;
+   uint32_t unNextHeartbeat = 0;
 
    for(;;) {
-      if(Firmware::GetInstance().GetHUARTController().Available()) {
-         unInput = Firmware::GetInstance().GetHUARTController().Read();
+      if(Firmware::GetInstance().GetTUARTController().Available()) {
+         unInput = Firmware::GetInstance().GetTUARTController().Read();
          /* flush */
-         while(Firmware::GetInstance().GetHUARTController().Available()) {
-            Firmware::GetInstance().GetHUARTController().Read();
+         while(Firmware::GetInstance().GetTUARTController().Available()) {
+            Firmware::GetInstance().GetTUARTController().Read();
          }
       }
       else {
@@ -524,7 +535,7 @@ int Firmware::Exec() {
          break;
       case 'b':
          // assumes divider with 330k and 1M
-         fprintf(m_psHUART,
+         fprintf(m_psTUART,
                  "Battery = %umV\r\n", 
                  m_cADCController.GetValue(CADCController::EChannel::ADC7) * 17);
          break;
@@ -541,14 +552,18 @@ int Firmware::Exec() {
          TestPMIC();
          break;
       case 'u':
-         fprintf(m_psHUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
+         fprintf(m_psTUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
          break;
       default:
          m_cPortController.SynchronizeInterrupts();
          if(m_cPortController.HasInterrupts()) {
-            fprintf(m_psHUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
+            fprintf(m_psTUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
             m_cPortController.ClearInterrupts();
             TestNFCRx();
+         }
+         if(m_cTimer.GetMilliseconds() > unNextHeartbeat) {
+            unNextHeartbeat += 1000;
+            fprintf(m_psTUART, ".");
          }
          break;
       }
