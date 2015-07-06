@@ -386,13 +386,13 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
 uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
     write_cmd(cmd, len);
 #ifdef DEBUG
-    fprintf(Firmware::GetInstance().m_psTUART,"Checking for ACK frame\r\n");
+    fprintf(Firmware::GetInstance().m_psHUART,"Checking for ACK frame\r\n");
 #endif
 
     // read acknowledgement
     if (!read_ack()) {
 #ifdef DEBUG
-       fprintf(Firmware::GetInstance().m_psTUART, "No ACK frame received!\r\n");
+       fprintf(Firmware::GetInstance().m_psHUART, "No ACK frame received!\r\n");
 #endif
        return false;
     }
@@ -553,7 +553,7 @@ bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
 /*****************************************************************************/
 bool CNFCController::read_ack(void)
 {
-   uint8_t ack_buf[6];
+   uint8_t ack_buf[6] = {0};
 
    read_dt(ack_buf, 6);
 

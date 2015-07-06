@@ -17,15 +17,15 @@
 #include <tuart_controller.h>
 #include <tw_controller.h>
 #include <nfc_controller.h>
+#include <led_controller.h>
 #include <port_controller.h>
 #include <adc_controller.h>
 #include <timer.h>
 
+#define NUM_PORTS 6
+
 /* I2C Address Space */
 #define MPU6050_ADDR               0x68
-#define LTC2990_ADDR               0x4C
-#define PCA9635_ADDR               0x18
-#define PCA9635_RST                0x03
 
 enum class EMPU6050Register : uint8_t {
    /* MPU6050 Registers */
@@ -40,64 +40,6 @@ enum class EMPU6050Register : uint8_t {
    TEMP_OUT_H     = 0x41, // R  
    TEMP_OUT_L     = 0x42, // R  
    WHOAMI         = 0x75  // R
-};
-
-enum class ELTC2990Register : uint8_t {
-   /* LTC2990 Registers */
-   STATUS         = 0x00, // R
-   CONTROL        = 0x01, // R/W
-   TRIGGER        = 0x02, // R/W
-   TINT_H         = 0x04, // R
-   TINT_L         = 0x05, // R
-   V1_H           = 0x06, // R
-   V1_L           = 0x07, // R
-   V2_H           = 0x08, // R
-   V2_L           = 0x09, // R
-   V3_H           = 0x0A, // R
-   V3_L           = 0x0B, // R
-   V4_H           = 0x0C, // R
-   V4_L           = 0x0D, // R
-   VCC_H          = 0x0E, // R
-   VCC_L          = 0x0F  // R
-};
-
-enum class EPCA9635LEDMode : uint8_t {
-   OFF  = 0x00,
-   ON   = 0x01,
-   PWM  = 0x02
-};
-
-#define LEDOUTX_MASK  0x03
-
-enum class EPCA9635Register : uint8_t {
-   MODE1          = 0x00, // R/W
-   MODE2          = 0x01, // R/W
-   PWM0           = 0x02, // R/W
-   PWM1           = 0x03, // R/W
-   PWM2           = 0x04, // R/W
-   PWM3           = 0x05, // R/W
-   PWM4           = 0x06, // R/W
-   PWM5           = 0x07, // R/W
-   PWM6           = 0x08, // R/W
-   PWM7           = 0x09, // R/W
-   PWM8           = 0x0A, // R/W
-   PWM9           = 0x0B, // R/W
-   PWM10          = 0x0C, // R/W
-   PWM11          = 0x0D, // R/W
-   PWM12          = 0x0E, // R/W
-   PWM13          = 0x0F, // R/W
-   PWM14          = 0x10, // R/W
-   PWM15          = 0x11, // R/W
-   GRPPWM         = 0x12, // R/W
-   GRPFREQ        = 0x13, // R/W
-   LEDOUT0        = 0x14, // R/W
-   LEDOUT1        = 0x15, // R/W
-   LEDOUT2        = 0x16, // R/W
-   LEDOUT3        = 0x17, // R/W
-   SUBADR1        = 0x18, // R/W
-   SUBADR2        = 0x19, // R/W
-   SUBADR3        = 0x1A, // R/W
-   ALLCALLADR     = 0x1B // R/W
 };
 
 #define PWR_MON_MASK   0xC0
@@ -119,6 +61,7 @@ public:
    void SetFilePointers(FILE* ps_huart, FILE* ps_tuart) {
       m_psHUART = ps_huart;
       m_psTUART = ps_tuart;
+      m_psOutputUART = ps_huart;
    }
 
    CTUARTController& GetTUARTController() {
@@ -146,27 +89,34 @@ public:
       
 private:
 
+   bool bHasXbee;
+
    bool InitXbee();
    bool InitMPU6050();
 
    bool InitPCA9635();
    bool InitPN532();
 
-   void DetectFaces();
+   void DetectPorts();
+   const char* GetPortString(CPortController::EPort ePort);
+
+   void HardwareTestMode();
+   void InteractiveMode();
 
    /* Test Routines */
    void TestAccelerometer();
    void TestPMIC();
    void TestLEDs();
-   void TestNFCTx();
-   void TestNFCRx();
+   bool TestNFCTx();
+   bool TestNFCRx();
+
+   struct CBlockLEDRoutines {
+      static void SetAllColorsOnFace(uint8_t unRed, uint8_t unGreen, uint8_t unBlue);
+      static void SetAllModesOnFace(CLEDController::EMode eMode);
+   };
 
    /* Reset */
    void Reset();
-
-   /* LED commands */
-   void PCA9635_SetLEDMode(uint8_t un_led, EPCA9635LEDMode e_mode);
-   void PCA9635_SetLEDBrightness(uint8_t un_led, uint8_t un_val);
 
    /* private constructor */
    Firmware() :
@@ -179,6 +129,7 @@ private:
                TIFR0,
                TCNT0,
                TIMER0_OVF_vect_num),
+      m_cPortController(),
       m_cHUARTController(HardwareSerial::instance()),
       m_cTUARTController(9600,
                          TCCR1A,
@@ -192,24 +143,31 @@ private:
                          TIMER1_CAPT_vect_num,
                          TIMER1_COMPA_vect_num,
                          TIMER1_COMPB_vect_num),
-      m_cTWController(CTWController::GetInstance()) {     
-
-      /* Enable interrupts */
-      sei();
-
-      /* Initialisation of external hardware requires interrupts to enable bus
-         transactions over TW, HUART and TUART */
-      m_cPortController.Init();
-
-      /* Configure the BQ24075 monitoring pins */
-      /* TODO: Move this logic into a power manager class */
-      DDRD &= ~PWR_MON_MASK;  // set as input
-      PORTD &= ~PWR_MON_MASK; // disable pull ups
-   }
+      m_cTWController(CTWController::GetInstance()) {}
    
    CTimer m_cTimer;
 
    CPortController m_cPortController;
+
+   CPortController::EPort m_peAllPorts[NUM_PORTS] {
+      CPortController::EPort::NORTH,
+      CPortController::EPort::EAST,
+      CPortController::EPort::SOUTH,
+      CPortController::EPort::WEST,
+      CPortController::EPort::TOP,
+      CPortController::EPort::BOTTOM,
+   };
+
+   CPortController::EPort m_peConnectedPorts[NUM_PORTS] {
+      CPortController::EPort::NULLPORT,
+      CPortController::EPort::NULLPORT,
+      CPortController::EPort::NULLPORT,
+      CPortController::EPort::NULLPORT,
+      CPortController::EPort::NULLPORT,
+      CPortController::EPort::NULLPORT,
+   };
+
+
 
    /* ATMega328P Controllers */
    /* TODO remove singleton and reference from HUART */
@@ -224,19 +182,14 @@ private:
 
    CADCController m_cADCController;
 
+
    static Firmware _firmware;
    
-   CPortController::EPort peConnectedPorts[6];
-
-   uint8_t unConnectedPortsIdx = 0;
-
-
 public: // TODO, don't make these public
     /* File structs for fprintf */
    FILE* m_psTUART;
    FILE* m_psHUART;
-
-
+   FILE* m_psOutputUART;
 
 };
 

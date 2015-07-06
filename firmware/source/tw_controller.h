@@ -51,6 +51,9 @@ public:
    void BeginTransmission(uint8_t);
    uint8_t EndTransmission(bool b_send_stop = true);
 
+   void Enable();
+   void Disable();
+
    virtual uint8_t Write(uint8_t un_data); // private? merge into method below
    virtual uint8_t Write(const uint8_t* pun_data, uint8_t un_num_bytes); // b_send_stop
 

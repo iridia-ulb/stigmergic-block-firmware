@@ -184,8 +184,7 @@ ISR(TWI_vect)
 
 // Constructors ////////////////////////////////////////////////////////////////
 
-CTWController::CTWController()
-{
+CTWController::CTWController() {
   m_unRxBufferIndex = 0;
   m_unRxBufferLength = 0;
 
@@ -200,26 +199,25 @@ CTWController::CTWController()
   bSendStop = true;		// default value
   bInRepStart = false;
   
-  // NOT REQUIRED, external pull ups are present, ports are input by default
-  //digitalWrite(SDA, 1);
-  //digitalWrite(SCL, 1);
-
   // initialize twi prescaler and bit rate
-  //cbi(TWSR, TWPS0);
-  //cbi(TWSR, TWPS1);
   TWSR &= ~(_BV(TWPS0) | _BV(TWPS1));
 
   // prescaler, TWBR is 32 for 8MHz external clock and 100KHz SCL
   TWBR = ((F_CPU / TW_SCL_FREQ) - 16) / 2;
 
-  // enable i2c hardware, acks, and interrupt
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
 }
 
-// Public Methods //////////////////////////////////////////////////////////////
 
-uint8_t CTWController::Read(uint8_t un_address, uint8_t un_length, bool b_send_stop)
-{
+void CTWController::Enable() {
+   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
+}
+
+void CTWController::Disable() {
+   TWCR = 0;
+}
+
+uint8_t CTWController::Read(uint8_t un_address, uint8_t un_length, bool b_send_stop) {
   // clamp to buffer length
   if(un_length > TW_BUFFER_LENGTH) {
     un_length = TW_BUFFER_LENGTH;
@@ -334,7 +332,7 @@ uint8_t CTWController::EndTransmission(bool b_send_stop) {
    for(uint8_t i = 0; i < m_unTxBufferLength; ++i){
       punMasterBuffer[i] = m_punTxBuffer[i];
    }
-  
+
    // build sla+w, slave device address + w bit
    unSlarw = TW_WRITE;
    unSlarw |= m_unTxAddress << 1;
@@ -369,10 +367,13 @@ uint8_t CTWController::EndTransmission(bool b_send_stop) {
 
    // indicate that we are done transmitting
    m_bTransmitting = false;
+
+
   
    if (unError == TW_BUS_NO_ERROR) // clean up with case statement
       return 0;	// success
-   else if (unError == TW_MT_SLA_NACK)
+   
+   if (unError == TW_MT_SLA_NACK)
       return 2;	// error: address send, nack received
    else if (unError == TW_MT_DATA_NACK)
       return 3;	// error: data send, nack received

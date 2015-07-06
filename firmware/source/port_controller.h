@@ -11,6 +11,8 @@
 #define PCA9554_RST_ADDR           0x20
 #define PCA9554_IRQ_ADDR           0x21
 
+#define NUM_PORTS 6
+
 
 class CPortController {
 public:
@@ -20,7 +22,8 @@ public:
       SOUTH  = 2,
       WEST   = 3,
       TOP    = 4,
-      BOTTOM = 5
+      BOTTOM = 5,
+      NULLPORT = 8
    };
 public:
    CPortController();
@@ -37,9 +40,10 @@ public:
    void DisablePort(EPort e_disable);
    void SelectPort(EPort e_select);
 
-   bool IsPortConnected();
+   bool IsPortConnected(EPort e_target);
 
 private:
+   
    enum class EPCA9554Register : uint8_t {
       INPUT          = 0x00, // R
       OUTPUT         = 0x01, // R/W
@@ -48,7 +52,7 @@ private:
 
    uint8_t m_unInterrupts;
    uint8_t m_unLastRegisterState;
-   bool bSynchronizeRequired;
+   bool bSynchronizeRequired; 
 
    class CPortInterrupt : public CInterrupt {
    private:

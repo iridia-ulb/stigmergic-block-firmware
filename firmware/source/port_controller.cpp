@@ -4,7 +4,7 @@
 #include <firmware.h>
 
 #define NUM_FACES 6
-#define PORTC_TW_MASK 0x30
+#define PORTC_TWCLK_MASK 0x20
 
 CPortController::CPortInterrupt::CPortInterrupt(CPortController* pc_port_controller, uint8_t un_intr_vect_num) :
    m_pcPortController(pc_port_controller) {
@@ -32,8 +32,7 @@ CPortController::CPortController() :
 
    /* Disable all ports initially */
    /* Safe state, since selected a non-connected face results in stalling the tw bus on R/W */
-   PORTC &= ~PORT_CTRL_MASK;
-   PORTC |= 8 & PORT_CTRL_MASK;
+   SelectPort(EPort::NULLPORT);
 }
 
 
@@ -44,6 +43,7 @@ void CPortController::Init() {
    /* Configure the reset lines to the faces as outputs (driven high by default) */
    Firmware::GetInstance().GetTWController().Write(0xC0);
    Firmware::GetInstance().GetTWController().EndTransmission(true);
+
    /* Note: in next hardware revision disable all faces on init */
 
    /* Enable external interrupt */
@@ -131,10 +131,9 @@ void CPortController::DisablePort(EPort e_target_port) {
 /***********************************************************/
 /***********************************************************/
 
-void CPortController::SelectPort(EPort e_target_port) {
+void CPortController::SelectPort(EPort e_target) {
    PORTC &= ~PORT_CTRL_MASK;
-   PORTC |= static_cast<uint8_t>(e_target_port) & PORT_CTRL_MASK;
-   Firmware::GetInstance().GetTimer().Delay(100);
+   PORTC |= static_cast<uint8_t>(e_target) & PORT_CTRL_MASK;
 }
 
 /***********************************************************/
@@ -142,7 +141,21 @@ void CPortController::SelectPort(EPort e_target_port) {
 
 /* This function detects if the selected port in connected, 
    via testing the pull up resistors */
-bool CPortController::IsPortConnected() {
-   // Lock TWController before doing test
-   return ((PINC & PORTC_TW_MASK) != 0);
+bool CPortController::IsPortConnected(EPort e_target) {
+   /* Make sure TWController is disabled before testing */
+   // To avoid confusing devices, only use the clock line
+   SelectPort(e_target);
+   Firmware::GetInstance().GetTimer().Delay(10);
+
+   PORTC &= ~PORTC_TWCLK_MASK;
+   DDRC |= PORTC_TWCLK_MASK;
+   DDRC &= ~PORTC_TWCLK_MASK;
+   PORTC |= PORTC_TWCLK_MASK;
+
+   Firmware::GetInstance().GetTimer().Delay(10);
+
+   return ((PINC & PORTC_TWCLK_MASK) != 0);
 }
+
+/***********************************************************/
+/***********************************************************/
