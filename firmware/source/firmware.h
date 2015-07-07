@@ -100,7 +100,7 @@ private:
    void DetectPorts();
    const char* GetPortString(CPortController::EPort ePort);
 
-   void HardwareTestMode();
+   //void HardwareTestMode();
    void InteractiveMode();
 
    /* Test Routines */

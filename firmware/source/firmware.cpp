@@ -308,6 +308,8 @@ void Firmware::TestLEDs() {
    }
 }
 
+#define NFC_DEBUG
+
 /***********************************************************/
 /***********************************************************/
 
@@ -418,15 +420,6 @@ int Firmware::Exec() {
    /* Begin Init */
    fprintf(m_psOutputUART, "[%05lu] Initialize Smartblock\r\n", m_cTimer.GetMilliseconds());
 
-   /* Do Xbee detection */
-   bHasXbee = false;
-   /*
-   if((bHasXbee = InitXbee()) == true) {
-      fprintf(m_psOutputUART, "[%05lu] Xbee IO Selected!\r\n", m_cTimer.GetMilliseconds());
-      m_psOutputUART = m_psHUART;
-   }
-   */
-
    /* Configure port controller, detect ports */
    fprintf(m_psOutputUART, "[%05lu] Detecting Ports\r\n", m_cTimer.GetMilliseconds());
 
@@ -464,7 +457,7 @@ int Firmware::Exec() {
                  GetPortString(eConnectedPort));
          CLEDController::Init();
          CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::BLINK);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x80,0x00,0x00);
+         CBlockLEDRoutines::SetAllColorsOnFace(0x20,0x00,0x00);
          fprintf(m_psOutputUART, "[%05lu] Init PN532 on %s\r\n", 
                  m_cTimer.GetMilliseconds(), 
                  GetPortString(eConnectedPort));
@@ -472,95 +465,28 @@ int Firmware::Exec() {
          for(uint8_t unAttempts = 3; unAttempts > 0; unAttempts--) {
             if(InitPN532() == true) {
                CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x80,0x00);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x20,0x00);
                break;
             }
             m_cTimer.Delay(100);
          }
       }
    }
-   HardwareTestMode();
 
-   return 0;
-}
-
-/***********************************************************/
-/***********************************************************/
-#define HTM_DEBUG
-
-void Firmware::HardwareTestMode() {
-   uint8_t unTxPortIdx = 0;
-   uint8_t unTxBuffer = '!';
-   uint8_t unRxBuffer[1] = {0};
-   CPortController::EPort eTxPort = m_peConnectedPorts[unTxPortIdx];
-   uint8_t unPortBrightness[NUM_PORTS] = {0x20, 0x20, 0x20, 0x20, 0x20, 0x20};
-   for(;;) {
-
-      /* check for interrupts */
-      m_cPortController.SynchronizeInterrupts();
-      if(m_cPortController.HasInterrupts()) {
-         uint8_t unIRQs = m_cPortController.GetInterrupts();
-         fprintf(m_psOutputUART, "Rx:IRQ(0x%02X)\r\n", unIRQs);
-
-         for(CPortController::EPort eRxPort : m_peConnectedPorts) {
-            if(eRxPort != CPortController::EPort::NULLPORT) {
-               if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
-#ifdef HTM_DEBUG
-                  fprintf(m_psOutputUART, "Rx(%s)\r\n", GetPortString(eRxPort));
-#endif
-                  m_cPortController.SelectPort(eRxPort);
-                  if(m_cNFCController.P2PTargetInit() &&
-                     m_cNFCController.P2PTargetTxRx(&unTxBuffer, 1, unRxBuffer, 1) > 0) {
-                     unPortBrightness[static_cast<uint8_t>(eRxPort)] = 0x20;
-                     CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x20, 0x00);     
-                  }
-                  m_cPortController.DisablePort(eRxPort);
-                  m_cPortController.EnablePort(eRxPort);
-                  m_cTimer.Delay(10);
-                  InitPN532();
-                  m_cTimer.Delay(50);
-                  m_cPortController.SynchronizeInterrupts();
-                  m_cPortController.ClearInterrupts(0x01 << static_cast<uint8_t>(eRxPort));
-               }
-            }
-         }
-      }
-      else {
-         /* Find the next connected face for Tx */
-         do {
-            eTxPort = m_peConnectedPorts[unTxPortIdx = (unTxPortIdx + 1) % NUM_PORTS];
-         } while(eTxPort == CPortController::EPort::NULLPORT);
-#ifdef HTM_DEBUG
-         fprintf(m_psOutputUART, "Tx(%s)\r\n", GetPortString(eTxPort));
-#endif
-         m_cPortController.SelectPort(eTxPort);
-         if(m_cNFCController.P2PInitiatorInit() &&
-            m_cNFCController.P2PInitiatorTxRx(&unTxBuffer, 1, unRxBuffer, 1) > 0) {
-            unPortBrightness[static_cast<uint8_t>(eTxPort)] = 0x20;
-#ifdef HTM_DEBUG
-            fprintf(m_psOutputUART, "Tx++(%u)\r\n", unPortBrightness[static_cast<uint8_t>(eTxPort)]);
-#endif
-            CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x20, 0x00);     
-         }
-         else {
-            if(unPortBrightness[static_cast<uint8_t>(eTxPort)] > 0x00) {
-               unPortBrightness[static_cast<uint8_t>(eTxPort)] -= 4;
-               uint8_t unVal = unPortBrightness[static_cast<uint8_t>(eTxPort)];
-#ifdef HTM_DEBUG
-               fprintf(m_psOutputUART, "Tx--(%u)\r\n", unVal);
-#endif
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00, unVal, 0x00);
-            }
-         }
-         m_cPortController.DisablePort(eTxPort);
-         m_cPortController.EnablePort(eTxPort);
-         m_cTimer.Delay(10);
-         InitPN532();
-         m_cTimer.Delay(50);
-         m_cPortController.SynchronizeInterrupts();
-         m_cPortController.ClearInterrupts(0x01 << static_cast<uint8_t>(eTxPort));
+   /* Do Xbee detection */
+   bHasXbee = false;
+   if((bHasXbee = InitXbee()) == true) {
+      fprintf(m_psOutputUART, "[%05lu] Xbee IO Selected!\r\n", m_cTimer.GetMilliseconds());
+      m_psOutputUART = m_psTUART;
+      for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+         m_cPortController.SelectPort(eConnectedPort);
+         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x20);
       }
    }
+
+   InteractiveMode();
+
+   return 0;
 }
 
 /***********************************************************/
@@ -568,6 +494,11 @@ void Firmware::HardwareTestMode() {
 
 void Firmware::InteractiveMode() {
    uint8_t unInput = 0;
+
+   CPortController::EPort eTxPort = m_peConnectedPorts[0];
+
+   char cConnectedPortState[NUM_PORTS] = {
+      'G', 'G', 'G', 'G', 'G', 'G'};
 
    for(;;) {
       if(bHasXbee) {
@@ -611,7 +542,7 @@ void Firmware::InteractiveMode() {
          Reset();
          break;
       case 't':
-         m_cPortController.SelectPort(m_peConnectedPorts[0]);
+         m_cPortController.SelectPort(eTxPort);
          TestNFCTx();
          break;
       case 'p':
@@ -620,13 +551,53 @@ void Firmware::InteractiveMode() {
       case 'u':
          fprintf(m_psOutputUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
          break;
+      case '1' ... '6':
+         if(m_peConnectedPorts[unInput - '1'] != CPortController::EPort::NULLPORT) {
+            m_cPortController.SelectPort(eTxPort);
+            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
+            eTxPort = m_peConnectedPorts[unInput - '1'];
+            m_cPortController.SelectPort(eTxPort);
+            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::BLINK);
+         }
+         fprintf(m_psOutputUART, "Selected: %s\r\n", GetPortString(eTxPort));
+         break;
       default:
          m_cPortController.SynchronizeInterrupts();
          if(m_cPortController.HasInterrupts()) {
-            fprintf(m_psOutputUART, "INT = 0x%02x\r\n", m_cPortController.GetInterrupts());
-            m_cPortController.ClearInterrupts();
-            m_cPortController.SelectPort(m_peConnectedPorts[0]);
-            TestNFCRx();
+            uint8_t unIRQs = m_cPortController.GetInterrupts();
+            fprintf(m_psOutputUART, "irq(0x%02X)\r\n", unIRQs);
+            for(CPortController::EPort eRxPort : m_peConnectedPorts) {
+               if(eRxPort != CPortController::EPort::NULLPORT) {
+                  if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
+                     fprintf(m_psOutputUART, "Rx(%s)\r\n", GetPortString(eRxPort));
+                     m_cPortController.SelectPort(eRxPort);
+                     if(TestNFCRx() == true) {
+                        fprintf(m_psOutputUART, "A", GetPortString(eRxPort));
+                        CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
+                        switch(cConnectedPortState[static_cast<uint8_t>(eRxPort)]) {
+                        case 'R':
+                           fprintf(m_psOutputUART, "R", GetPortString(eRxPort));
+                           CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x20, 0x00);
+                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'G';
+                           break;
+                        case 'G':
+                           fprintf(m_psOutputUART, "G", GetPortString(eRxPort));
+                           CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x00, 0x20);
+                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'B';
+                           break;
+                        case 'B':
+                           fprintf(m_psOutputUART, "B", GetPortString(eRxPort));
+                           CBlockLEDRoutines::SetAllColorsOnFace(0x20, 0x00, 0x00);
+                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'R';
+                           break;
+                        default:
+                           fprintf(m_psOutputUART, "F", GetPortString(eRxPort));
+                           break;
+                        }
+                     }
+                  }
+               }
+            }
          }
          break;
       }
