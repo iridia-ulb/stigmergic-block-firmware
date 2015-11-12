@@ -457,7 +457,7 @@ int Firmware::Exec() {
                  GetPortString(eConnectedPort));
          CLEDController::Init();
          CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::BLINK);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x20,0x00,0x00);
+         CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x00,0x00);
          fprintf(m_psOutputUART, "[%05lu] Init PN532 on %s\r\n", 
                  m_cTimer.GetMilliseconds(), 
                  GetPortString(eConnectedPort));
@@ -465,7 +465,7 @@ int Firmware::Exec() {
          for(uint8_t unAttempts = 3; unAttempts > 0; unAttempts--) {
             if(InitPN532() == true) {
                CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x20,0x00);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x05,0x00);
                break;
             }
             m_cTimer.Delay(100);
@@ -480,7 +480,7 @@ int Firmware::Exec() {
       m_psOutputUART = m_psTUART;
       for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
          m_cPortController.SelectPort(eConnectedPort);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x20);
+         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x05);
       }
    }
 
@@ -496,9 +496,6 @@ void Firmware::InteractiveMode() {
    uint8_t unInput = 0;
 
    CPortController::EPort eTxPort = m_peConnectedPorts[0];
-
-   char cConnectedPortState[NUM_PORTS] = {
-      'G', 'G', 'G', 'G', 'G', 'G'};
 
    for(;;) {
       if(bHasXbee) {
@@ -569,30 +566,37 @@ void Firmware::InteractiveMode() {
             for(CPortController::EPort eRxPort : m_peConnectedPorts) {
                if(eRxPort != CPortController::EPort::NULLPORT) {
                   if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
-                     fprintf(m_psOutputUART, "Rx(%s)\r\n", GetPortString(eRxPort));
                      m_cPortController.SelectPort(eRxPort);
-                     if(TestNFCRx() == true) {
-                        fprintf(m_psOutputUART, "A", GetPortString(eRxPort));
-                        CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-                        switch(cConnectedPortState[static_cast<uint8_t>(eRxPort)]) {
-                        case 'R':
-                           fprintf(m_psOutputUART, "R", GetPortString(eRxPort));
-                           CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x20, 0x00);
-                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'G';
-                           break;
-                        case 'G':
-                           fprintf(m_psOutputUART, "G", GetPortString(eRxPort));
-                           CBlockLEDRoutines::SetAllColorsOnFace(0x00, 0x00, 0x20);
-                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'B';
-                           break;
-                        case 'B':
-                           fprintf(m_psOutputUART, "B", GetPortString(eRxPort));
-                           CBlockLEDRoutines::SetAllColorsOnFace(0x20, 0x00, 0x00);
-                           cConnectedPortState[static_cast<uint8_t>(eRxPort)] = 'R';
-                           break;
-                        default:
-                           fprintf(m_psOutputUART, "F", GetPortString(eRxPort));
-                           break;
+                     uint8_t punOutboundBuffer[] = {'S','B','0','1'};
+                     uint8_t punInboundBuffer[8];
+                     uint8_t unRxCount = 0;
+
+                     if(m_cNFCController.P2PTargetInit()) {
+                        unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer, 4, punInboundBuffer, 8);
+                     }
+                     m_cTimer.Delay(60);
+                     m_cNFCController.PowerDown();
+                     m_cTimer.Delay(100);
+                     m_cPortController.ClearInterrupts();
+
+                     for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+                        if(eConnectedPort != CPortController::EPort::NULLPORT) {
+                           m_cPortController.SelectPort(eConnectedPort);                          
+                           CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
+                           switch(punInboundBuffer[0]) {
+                           case 'R':
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x00,0x00);
+                              break;
+                           case 'G':
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x05,0x00);
+                              break;
+                           case 'B':
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x05);
+                              break;
+                           default:
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
+                              break;
+                           }
                         }
                      }
                   }
