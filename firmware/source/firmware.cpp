@@ -98,9 +98,9 @@ bool Firmware::InitXbee() {
    const uint8_t *ppunXbeeConfig[] = {
       (const uint8_t*)"+++",
       (const uint8_t*)"ATRE\r\n",
-      (const uint8_t*)"ATID 2001\r\n",
+      (const uint8_t*)"ATID 2003\r\n",
       (const uint8_t*)"ATDH 0013A200\r\n",
-      (const uint8_t*)"ATDL 40AA1A2C\r\n",
+      (const uint8_t*)"ATDL 40C262B9\r\n",
       (const uint8_t*)"ATCN\r\n"};
 
    enum class EInitXbeeState {
@@ -532,6 +532,34 @@ void Firmware::InteractiveMode() {
                  "Battery = %umV\r\n", 
                  m_cADCController.GetValue(CADCController::EChannel::ADC7) * 17);
          break;
+      case '1':
+         /* Q1 (U+, V+) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            m_cPortController.SelectPort(eConnectedPort);
+            CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
+         }
+         break;
+      case '2':
+         /* Q2 (U-, V+) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            m_cPortController.SelectPort(eConnectedPort);
+            CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
+         }
+         break;
+      case '3':
+         /* Q3 (U-, V-) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            m_cPortController.SelectPort(eConnectedPort);
+            CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+         }
+         break;
+      case '4':
+         /* Q4 (U+, V-) */        
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            m_cPortController.SelectPort(eConnectedPort);
+            CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+         }
+         break;
       case 'l':
          TestLEDs();
          break;
@@ -547,16 +575,6 @@ void Firmware::InteractiveMode() {
          break;
       case 'u':
          fprintf(m_psOutputUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
-         break;
-      case '1' ... '6':
-         if(m_peConnectedPorts[unInput - '1'] != CPortController::EPort::NULLPORT) {
-            m_cPortController.SelectPort(eTxPort);
-            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-            eTxPort = m_peConnectedPorts[unInput - '1'];
-            m_cPortController.SelectPort(eTxPort);
-            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::BLINK);
-         }
-         fprintf(m_psOutputUART, "Selected: %s\r\n", GetPortString(eTxPort));
          break;
       default:
          m_cPortController.SynchronizeInterrupts();
@@ -584,14 +602,21 @@ void Firmware::InteractiveMode() {
                            m_cPortController.SelectPort(eConnectedPort);                          
                            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
                            switch(punInboundBuffer[0]) {
-                           case 'R':
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x00,0x00);
+                           case '1':
+                              /* Q1 (U+, V+) */
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
                               break;
-                           case 'G':
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x05,0x00);
+                           case '2':
+                              /* Q2 (U-, V+) */
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
                               break;
-                           case 'B':
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x05);
+                           case '3':
+                              /* Q3 (U-, V-) */
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+                              break;
+                           case '4':
+                              /* Q4 (U+, V-) */
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
                               break;
                            default:
                               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
