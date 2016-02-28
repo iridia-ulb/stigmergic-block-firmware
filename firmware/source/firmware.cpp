@@ -465,7 +465,7 @@ int Firmware::Exec() {
          for(uint8_t unAttempts = 3; unAttempts > 0; unAttempts--) {
             if(InitPN532() == true) {
                CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x05,0x00);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
                break;
             }
             m_cTimer.Delay(100);
