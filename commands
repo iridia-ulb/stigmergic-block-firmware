@@ -1,7 +1,0 @@
-./ftx_prog --cbus[0] BCD_Charger# --cbus[1] PWREN --cbus[2] SLEEP --cbus[3] TxRxLED --max-bus-power 500 --self-powered off
-
-sudo ./ftx_prog --cbus 0 BCD_Charger# --cbus 1 PWREN --cbus 2 SLEEP --cbus 3 TxRxLED --max-bus-power 500 --self-powered off
-
-avrdude -c buspirate -p m328p -P /dev/ttyUSB5 -U lock:w:0x3F:m -U lfuse:w:0xFF:m -U hfuse:w:0xDE:m -U efuse:w:0x05:m -U flash:w:optiboot_atmega328.hex -U lock:w:0x0F:m
-
-
