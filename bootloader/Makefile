@@ -8,13 +8,10 @@ PROGRAM    = optiboot
 #
 # Toolchain and tool locations
 #
-TOOLROOT = ../../toolchain/install/bin
-GCCROOT = $(TOOLROOT)/bin/
-
-CC         = $(TOOLROOT)/avr-gcc
-OBJCOPY    = $(TOOLROOT)/avr-objcopy
-OBJDUMP    = $(TOOLROOT)/avr-objdump
-SIZE       = $(TOOLROOT)/avr-size
+CC         = avr-gcc
+OBJCOPY    = avr-objcopy
+OBJDUMP    = avr-objdump
+SIZE       = avr-size
 
 OBJ        = $(PROGRAM).o
 OPTIMIZE = -Os -fno-inline-small-functions -fno-split-wide-types -mrelax

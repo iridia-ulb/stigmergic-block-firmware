@@ -1,7 +1,7 @@
 ########################################################################
 # Target
 
-BOARD_TAG = smartblock-mainboard
+BOARD_TAG = stigmergic-block
 TARGET = firmware
 MCU = atmega328p
 F_CPU = 8000000UL
@@ -50,14 +50,14 @@ TARGET_ELF = $(OBJDIR)/$(TARGET).elf
 TARGET_EEP = $(OBJDIR)/$(TARGET).eep
 TARGETS    = $(OBJDIR)/$(TARGET).*
 
-CC      = $(AVR_TOOLS_PATH)/$(CC_NAME)
-CXX     = $(AVR_TOOLS_PATH)/$(CXX_NAME)
-AS      = $(AVR_TOOLS_PATH)/$(AS_NAME)
-OBJCOPY = $(AVR_TOOLS_PATH)/$(OBJCOPY_NAME)
-OBJDUMP = $(AVR_TOOLS_PATH)/$(OBJDUMP_NAME)
-AR      = $(AVR_TOOLS_PATH)/$(AR_NAME)
-SIZE    = $(AVR_TOOLS_PATH)/$(SIZE_NAME)
-NM      = $(AVR_TOOLS_PATH)/$(NM_NAME)
+CC      = $(CC_NAME)
+CXX     = $(CXX_NAME)
+AS      = $(AS_NAME)
+OBJCOPY = $(OBJCOPY_NAME)
+OBJDUMP = $(OBJDUMP_NAME)
+AR      = $(AR_NAME)
+SIZE    = $(SIZE_NAME)
+NM      = $(NM_NAME)
 
 REMOVE  = rm -rf
 MV      = mv -f
@@ -80,7 +80,7 @@ CFLAGS_STD    = -std=c++11
 CFLAGS        += $(EXTRA_FLAGS) $(EXTRA_CFLAGS)
 CXXFLAGS      += -fno-exceptions $(CFLAGS_STD) -I$(SRCDIR) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS)
 ASFLAGS       += -x assembler-with-cpp
-LDFLAGS       += -mmcu=$(MCU) -Wl,--gc-sections -Wl,-Tsource/avr5.xn -O$(OPTIMIZATION_LEVEL) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_LDFLAGS)
+LDFLAGS       += -mmcu=$(MCU) -Wl,--gc-sections -O$(OPTIMIZATION_LEVEL) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_LDFLAGS)
 SIZEFLAGS     ?= --mcu=$(MCU) -C
 
 avr_size = $(SIZE) $(2)
