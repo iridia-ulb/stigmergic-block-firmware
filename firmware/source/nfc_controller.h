@@ -34,6 +34,14 @@ enum class ESAMMode : uint8_t {
 class CNFCController {
 
 public:
+
+   enum class EStatus {
+      READY,
+      BUSY,
+      FAILED,
+   };
+
+
    enum class ECommand : uint8_t {
       DIAGNOSE              = 0x00,
       GETFIRMWAREVERSION    = 0x02,
@@ -91,11 +99,16 @@ public:
                          uint8_t  un_rx_buffer_len);
 
    bool PowerDown();
+
+   EStatus GetStatus() const {
+      return m_eStatus;
+   }
+
 private:
 
    void write_cmd(uint8_t *cmd, uint8_t len);
    uint8_t write_cmd_check_ack(uint8_t *cmd, uint8_t len);
-   bool read_dt(uint8_t *buf, uint8_t len);
+   bool read_dt(uint8_t *buf, uint8_t len, uint8_t tries = 25);
    bool read_ack(void);
 
    void puthex(uint8_t data);
@@ -103,6 +116,8 @@ private:
 
    /* data buffer for reading / writing commands */
    uint8_t m_punIOBuffer[NFC_CMD_BUF_LEN];
+
+   EStatus m_eStatus = EStatus::READY;
 
 };
 

@@ -107,7 +107,7 @@ private:
    void TestAccelerometer();
    void TestPMIC();
    void TestLEDs();
-   bool TestNFCTx();
+   CNFCController::EStatus TestNFCTx();
    bool TestNFCRx();
 
    struct CBlockLEDRoutines {

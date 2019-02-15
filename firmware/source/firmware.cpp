@@ -313,44 +313,35 @@ void Firmware::TestLEDs() {
 /***********************************************************/
 /***********************************************************/
 
-bool Firmware::TestNFCTx() {
-   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','2'};
+
+CNFCController::EStatus Firmware::TestNFCTx() {
+   uint8_t punOutboundBuffer[] = {'2'};
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-#ifdef NFC_DEBUG
-   fprintf(m_psOutputUART, "Testing NFC TX\r\n");           
-#endif
-   unRxCount = 0;
-   if(m_cNFCController.P2PInitiatorInit()) {
-#ifdef NFC_DEBUG
-      fprintf(m_psOutputUART, "Connected!\r\n");
-#endif
-      unRxCount = m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
-                                                    10,
-                                                    punInboundBuffer,
-                                                    20);
-#ifdef NFC_DEBUG
-      if(unRxCount > 0) {
-         fprintf(m_psOutputUART, "Received %i bytes: ", unRxCount);
-         for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psOutputUART, "%c", punInboundBuffer[i]);
-         }
-         fprintf(m_psOutputUART, "\r\n");
+   if(m_cNFCController.GetStatus() != CNFCController::EStatus::BUSY) {
+      if(!m_cNFCController.P2PInitiatorInit()) {
+         m_cNFCController.PowerDown();
+         m_cTimer.Delay(100);
+         m_cPortController.ClearInterrupts();
+         return CNFCController::EStatus::FAILED;
       }
-      else {
-         fprintf(m_psOutputUART, "No data\r\n");
-      }
-#endif
    }
-   m_cNFCController.PowerDown();
+   unRxCount =
+      m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
+                                        1,
+                                        punInboundBuffer,
+                                        20);
 
-   /* Once an response for a command is ready, an interrupt is generated
-      The last interrupt for the power down reply is cleared here */
-   m_cTimer.Delay(100);
-   m_cPortController.ClearInterrupts();
-   /* An unRxCount of greater than zero normally indicates success */
-   return (unRxCount > 0);
+   CNFCController::EStatus eStatus = m_cNFCController.GetStatus();
+
+   if(eStatus != CNFCController::EStatus::BUSY) {
+      /* either we are done or we have failed :( */
+      m_cNFCController.PowerDown();
+      m_cTimer.Delay(100);
+      m_cPortController.ClearInterrupts();
+   }
+   return eStatus;
 }
 
 /***********************************************************/
@@ -475,6 +466,7 @@ int Firmware::Exec() {
 
    /* Do Xbee detection */
    bHasXbee = false;
+   /*
    if((bHasXbee = InitXbee()) == true) {
       fprintf(m_psOutputUART, "[%05lu] Xbee IO Selected!\r\n", m_cTimer.GetMilliseconds());
       m_psOutputUART = m_psTUART;
@@ -483,6 +475,7 @@ int Firmware::Exec() {
          CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x05);
       }
    }
+   */
 
    InteractiveMode();
 
@@ -493,6 +486,7 @@ int Firmware::Exec() {
 /***********************************************************/
 
 void Firmware::InteractiveMode() {
+   bool bOnOff = true;
    uint8_t unInput = 0;
 
    CPortController::EPort eTxPort = m_peConnectedPorts[0];
@@ -567,8 +561,19 @@ void Firmware::InteractiveMode() {
          Reset();
          break;
       case 't':
-         m_cPortController.SelectPort(eTxPort);
-         TestNFCTx();
+         m_cPortController.SelectPort(CPortController::EPort::TOP);
+         while(TestNFCTx() != CNFCController::EStatus::READY) {
+            m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
+            if(bOnOff) {
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+            }
+            else {
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
+            }
+            bOnOff = !bOnOff;
+            fprintf(m_psOutputUART, ".");
+            m_cPortController.SelectPort(CPortController::EPort::TOP);
+         }
          break;
       case 'p':
          TestPMIC();
