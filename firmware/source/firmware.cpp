@@ -215,47 +215,31 @@ bool Firmware::InitPN532() {
 /***********************************************************/
 
 bool Firmware::InitMPU6050() {
-   /* Probe */
-   Firmware::GetInstance().GetTWController().BeginTransmission(MPU6050_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EMPU6050Register::WHOAMI));
-   Firmware::GetInstance().GetTWController().EndTransmission(false);
-   Firmware::GetInstance().GetTWController().Read(MPU6050_ADDR, 1, true);
-         
-   if(Firmware::GetInstance().GetTWController().Read() != MPU6050_ADDR) 
-      return false;
-   /* select internal clock, disable sleep/cycle mode, enable temperature sensor*/
-   Firmware::GetInstance().GetTWController().BeginTransmission(MPU6050_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EMPU6050Register::PWR_MGMT_1));
-   Firmware::GetInstance().GetTWController().Write(0x00);
-   Firmware::GetInstance().GetTWController().EndTransmission(true);
-
-   return true;
+   /* probe */
+   if(CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::WHOAMI) == MPU6050_ADDR) {
+      /* select internal clock, disable sleep/cycle mode, enable temperature sensor */
+      CTWController::GetInstance().Write(MPU6050_ADDR, EMPU6050Register::PWR_MGMT_1, 0x00);
+      return true;
+   }
+   else return false;
 }
 
 /***********************************************************/
 /***********************************************************/
 
 void Firmware::TestAccelerometer() {
-   /* Array for holding accelerometer result */
-   uint8_t punMPU6050Res[8];
-
-   Firmware::GetInstance().GetTWController().BeginTransmission(MPU6050_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EMPU6050Register::ACCEL_XOUT_H));
-   Firmware::GetInstance().GetTWController().EndTransmission(false);
-   Firmware::GetInstance().GetTWController().Read(MPU6050_ADDR, 8, true);
-   /* Read the requested 8 bytes */
-   for(uint8_t i = 0; i < 8; i++) {
-      punMPU6050Res[i] = Firmware::GetInstance().GetTWController().Read();
-   }
+   /* buffer for holding accelerometer result */
+   uint8_t punBuffer[8];
+   CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::ACCEL_XOUT_H, 8, punBuffer);
    fprintf(m_psOutputUART, 
            "Acc[x] = %i\r\n"
            "Acc[y] = %i\r\n"
            "Acc[z] = %i\r\n"
            "Temp = %i\r\n",
-           int16_t((punMPU6050Res[0] << 8) | punMPU6050Res[1]),
-           int16_t((punMPU6050Res[2] << 8) | punMPU6050Res[3]),
-           int16_t((punMPU6050Res[4] << 8) | punMPU6050Res[5]),
-           (int16_t((punMPU6050Res[6] << 8) | punMPU6050Res[7]) + 12412) / 340);  
+           int16_t((punBuffer[0] << 8) | punBuffer[1]),
+           int16_t((punBuffer[2] << 8) | punBuffer[3]),
+           int16_t((punBuffer[4] << 8) | punBuffer[5]),
+           (int16_t((punBuffer[6] << 8) | punBuffer[7]) + 12412) / 340);  
 }
 
 /***********************************************************/
@@ -313,7 +297,6 @@ void Firmware::TestLEDs() {
 /***********************************************************/
 /***********************************************************/
 
-
 CNFCController::EStatus Firmware::TestNFCTx() {
    uint8_t punOutboundBuffer[] = {'2'};
    uint8_t punInboundBuffer[20];
@@ -336,7 +319,6 @@ CNFCController::EStatus Firmware::TestNFCTx() {
    CNFCController::EStatus eStatus = m_cNFCController.GetStatus();
 
    if(eStatus != CNFCController::EStatus::BUSY) {
-      /* either we are done or we have failed :( */
       m_cNFCController.PowerDown();
       m_cTimer.Delay(100);
       m_cPortController.ClearInterrupts();
@@ -377,15 +359,13 @@ bool Firmware::TestNFCRx() {
       }
 #endif
    }
-   /* This delay is important - entering power down too soon causes issues
-      with future communication */
+   // This delay is important - entering power down too soon causes issues with future communication
    m_cTimer.Delay(60);
    m_cNFCController.PowerDown();
-   /* Once an response for a command is ready, an interrupt is generated
-      The last interrupt for the power down reply is cleared here */
+   // Once an response for a command is ready, an interrupt is generated. The last interrupt for the power down reply is cleared here
    m_cTimer.Delay(100);
    m_cPortController.ClearInterrupts();
-   /* An unRxCount of greater than zero normally indicates success */
+   // An unRxCount of greater than zero normally indicates success
    return (unRxCount > 0);
 }
 
@@ -409,7 +389,7 @@ int Firmware::Exec() {
    sei();
   
    /* Begin Init */
-   fprintf(m_psOutputUART, "[%05lu] Initialize Smartblock\r\n", m_cTimer.GetMilliseconds());
+   fprintf(m_psOutputUART, "[%05lu] Stigmergic Block Initialization\r\n", m_cTimer.GetMilliseconds());
 
    /* Configure port controller, detect ports */
    fprintf(m_psOutputUART, "[%05lu] Detecting Ports\r\n", m_cTimer.GetMilliseconds());
@@ -418,9 +398,9 @@ int Firmware::Exec() {
    m_cPortController.SelectPort(CPortController::EPort::NULLPORT);
    m_cTimer.Delay(10);
    m_cPortController.Init();
-   m_cTWController.Disable();
+   CTWController::GetInstance().Disable();
    DetectPorts();
-   m_cTWController.Enable();
+   CTWController::GetInstance().Enable();
 
    fprintf(m_psOutputUART, "[%05lu] Connected Ports: ", m_cTimer.GetMilliseconds());
    for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
@@ -486,7 +466,6 @@ int Firmware::Exec() {
 /***********************************************************/
 
 void Firmware::InteractiveMode() {
-   bool bOnOff = true;
    uint8_t unInput = 0;
 
    CPortController::EPort eTxPort = m_peConnectedPorts[0];
@@ -529,29 +508,37 @@ void Firmware::InteractiveMode() {
       case '1':
          /* Q1 (U+, V+) */
          for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            m_cPortController.SelectPort(eConnectedPort);
-            CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
+            }
          }
          break;
       case '2':
          /* Q2 (U-, V+) */
          for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            m_cPortController.SelectPort(eConnectedPort);
-            CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
+            }
          }
          break;
       case '3':
          /* Q3 (U-, V-) */
          for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            m_cPortController.SelectPort(eConnectedPort);
-            CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+            }
          }
          break;
       case '4':
          /* Q4 (U+, V-) */        
          for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            m_cPortController.SelectPort(eConnectedPort);
-            CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+            }
          }
          break;
       case 'l':
@@ -564,13 +551,6 @@ void Firmware::InteractiveMode() {
          m_cPortController.SelectPort(CPortController::EPort::TOP);
          while(TestNFCTx() != CNFCController::EStatus::READY) {
             m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
-            if(bOnOff) {
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
-            }
-            else {
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
-            }
-            bOnOff = !bOnOff;
             fprintf(m_psOutputUART, ".");
             m_cPortController.SelectPort(CPortController::EPort::TOP);
          }
@@ -604,23 +584,23 @@ void Firmware::InteractiveMode() {
 
                      for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
                         if(eConnectedPort != CPortController::EPort::NULLPORT) {
-                           m_cPortController.SelectPort(eConnectedPort);                          
+                           m_cPortController.SelectPort(eConnectedPort);
                            CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
                            switch(punInboundBuffer[0]) {
                            case '1':
-                              /* Q1 (U+, V+) */
+                              // Q1 (U+, V+)
                               CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
                               break;
                            case '2':
-                              /* Q2 (U-, V+) */
+                              // Q2 (U-, V+)
                               CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
                               break;
                            case '3':
-                              /* Q3 (U-, V-) */
+                              // Q3 (U-, V-)
                               CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
                               break;
                            case '4':
-                              /* Q4 (U+, V-) */
+                              // Q4 (U+, V-)
                               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
                               break;
                            default:
@@ -651,10 +631,10 @@ void Firmware::InteractiveMode() {
 /***********************************************************/
 /***********************************************************/
 
+
 void Firmware::CBlockLEDRoutines::SetAllColorsOnFace(uint8_t unRed, 
                                                      uint8_t unGreen, 
                                                      uint8_t unBlue) {
-
    for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
       CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
                                     RGB_RED_OFFSET, unRed);
@@ -665,12 +645,11 @@ void Firmware::CBlockLEDRoutines::SetAllColorsOnFace(uint8_t unRed,
    }
 }
 
-/***********************************************************/
-/***********************************************************/
 
+/***********************************************************/
+/***********************************************************/
 
 void Firmware::CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode e_mode) {
-
    for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
       CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE 
                               + RGB_RED_OFFSET, e_mode);
@@ -682,4 +661,6 @@ void Firmware::CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode e_mode
                               RGB_UNUSED_OFFSET, CLEDController::EMode::OFF);
    }
 }
+
+
 

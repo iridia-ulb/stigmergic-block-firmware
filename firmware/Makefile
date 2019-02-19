@@ -69,16 +69,14 @@ OPTIMIZATION_LEVEL = s
 
 # -I$(AVR_TOOLCHAIN_DIR)/avr/include
 # probably need to give the path to libavr here
-CPPFLAGS += -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Wall -ffunction-sections -fdata-sections
+CPPFLAGS += -mmcu=$(MCU) -DF_CPU=$(F_CPU) -Wall -ffunction-sections -fdata-sections -fno-threadsafe-statics
 
 OPTIMIZATION_FLAGS = -O$(OPTIMIZATION_LEVEL)
 
 CPPFLAGS += $(OPTIMIZATION_FLAGS)
 
-CFLAGS_STD    = -std=c++11
-
 CFLAGS        += $(EXTRA_FLAGS) $(EXTRA_CFLAGS)
-CXXFLAGS      += -fno-exceptions $(CFLAGS_STD) -I$(SRCDIR) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS)
+CXXFLAGS      += -fno-exceptions -I$(SRCDIR) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS)
 ASFLAGS       += -x assembler-with-cpp
 LDFLAGS       += -mmcu=$(MCU) -Wl,--gc-sections -O$(OPTIMIZATION_LEVEL) $(EXTRA_FLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_LDFLAGS)
 SIZEFLAGS     ?= --mcu=$(MCU) -C

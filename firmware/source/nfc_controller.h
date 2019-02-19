@@ -108,7 +108,7 @@ private:
 
    void write_cmd(uint8_t *cmd, uint8_t len);
    uint8_t write_cmd_check_ack(uint8_t *cmd, uint8_t len);
-   bool read_dt(uint8_t *buf, uint8_t len, uint8_t tries = 25);
+   bool Read(uint8_t *buf, uint8_t len, uint8_t tries = 25);
    bool read_ack(void);
 
    void puthex(uint8_t data);

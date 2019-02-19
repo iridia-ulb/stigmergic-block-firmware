@@ -5,6 +5,7 @@
 uint8_t ack[6]={
     0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00
 };
+
 uint8_t nfc_version[6]={
     0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03
 };
@@ -26,7 +27,7 @@ bool CNFCController::PowerDown() {
    }
 
    /* read the rest of the reply */
-   read_dt(m_punIOBuffer, 8);
+   Read(m_punIOBuffer, 8);
    /* verify that the recieved data was a reply frame to given command */
    if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
       m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::POWERDOWN)) {
@@ -58,7 +59,7 @@ bool CNFCController::Probe() {
       return false;
    }
    /* read the rest of the reply */
-   read_dt(m_punIOBuffer, 12);
+   Read(m_punIOBuffer, 12);
    /* verify that the recieved data was a reply frame to given command */
    if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
       m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION)) {
@@ -88,7 +89,7 @@ bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_us
        return false;
     }
     /* read response */
-    read_dt(m_punIOBuffer, 8);
+    Read(m_punIOBuffer, 8);
     /* return whether the reply was as expected */
     return  (m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 == static_cast<uint8_t>(ECommand::SAMCONFIGURATION));
 }
@@ -125,7 +126,7 @@ bool CNFCController::P2PInitiatorInit() {
     fprintf(Firmware::GetInstance().m_psTUART, "InJumpForDEP sent\n");
 #endif
 
-    read_dt(m_punIOBuffer, 25);
+    Read(m_punIOBuffer, 25);
 
     if(m_punIOBuffer[5] != PN532_PN532TOHOST) {
        //        Serial.println("InJumpForDEP sent read failed");
@@ -211,7 +212,7 @@ bool CNFCController::P2PTargetInit() {
 #ifdef DEBUG
         fprintf(Firmware::GetInstance().m_psTUART, "Target init sent\r\n");
 #endif
-    read_dt(m_punIOBuffer, 24);
+    Read(m_punIOBuffer, 24);
 
     if(m_punIOBuffer[5] != PN532_PN532TOHOST){
         return false;
@@ -260,7 +261,7 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
       }
    }
 
-   bool bReady = read_dt(m_punIOBuffer, 60, 1);
+   bool bReady = Read(m_punIOBuffer, 60, 1);
 
    if(bReady) {
       /* check response validity */
@@ -309,7 +310,7 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(!write_cmd_check_ack(m_punIOBuffer, 1)){
       return 0;
    }
-   read_dt(m_punIOBuffer, 60);
+   Read(m_punIOBuffer, 60);
    if(m_punIOBuffer[5] != PN532_PN532TOHOST){
       return 0;
    }
@@ -347,7 +348,7 @@ uint8_t CNFCController::P2PTargetTxRx(uint8_t* pun_tx_buffer,
    if(!write_cmd_check_ack(m_punIOBuffer, un_tx_buffer_len + 1)) {
       return 0;
    }
-   read_dt(m_punIOBuffer, 26);
+   Read(m_punIOBuffer, 26);
    if(m_punIOBuffer[5] != PN532_PN532TOHOST) {
       return 0;
    }
@@ -381,7 +382,6 @@ uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
 #ifdef DEBUG
     fprintf(Firmware::GetInstance().m_psHUART,"Checking for ACK frame\r\n");
 #endif
-
     // read acknowledgement
     if (!read_ack()) {
 #ifdef DEBUG
@@ -423,7 +423,6 @@ void CNFCController::puthex(uint8_t *buf, uint32_t len) {
 /*****************************************************************************/
 void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 {
-    uint8_t checksum;
 
     len++;
 
@@ -434,16 +433,16 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
     Firmware::GetInstance().GetTimer().Delay(2);     // or whatever the delay is for waking up the board
 
     // I2C START
-    Firmware::GetInstance().GetTWController().BeginTransmission(PN532_I2C_ADDRESS);
-    checksum = PN532_PREAMBLE + PN532_PREAMBLE + PN532_STARTCODE2;
-    Firmware::GetInstance().GetTWController().Write(PN532_PREAMBLE);
-    Firmware::GetInstance().GetTWController().Write(PN532_PREAMBLE);
-    Firmware::GetInstance().GetTWController().Write(PN532_STARTCODE2);
+    CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::TRANSMIT);
+    uint8_t checksum = PN532_PREAMBLE + PN532_PREAMBLE + PN532_STARTCODE2;
+    CTWController::GetInstance().Transmit(PN532_PREAMBLE);
+    CTWController::GetInstance().Transmit(PN532_PREAMBLE);
+    CTWController::GetInstance().Transmit(PN532_STARTCODE2);
 
-    Firmware::GetInstance().GetTWController().Write(len);
-    Firmware::GetInstance().GetTWController().Write(~len + 1);
+    CTWController::GetInstance().Transmit(len);
+    CTWController::GetInstance().Transmit(~len + 1);
 
-    Firmware::GetInstance().GetTWController().Write(PN532_HOSTTOPN532);
+    CTWController::GetInstance().Transmit(PN532_HOSTTOPN532);
     checksum += PN532_HOSTTOPN532;
 
 #ifdef DEBUG
@@ -457,7 +456,7 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 
     for (uint8_t i=0; i<len-1; i++)
     {
-        if(Firmware::GetInstance().GetTWController().Write(cmd[i])){
+        if(CTWController::GetInstance().Transmit(cmd[i])){
             checksum += cmd[i];
 #ifdef DEBUG
             puthex(cmd[i]);
@@ -468,11 +467,11 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
         }
     }
 
-    Firmware::GetInstance().GetTWController().Write(~checksum);
-    Firmware::GetInstance().GetTWController().Write(PN532_POSTAMBLE);
+    CTWController::GetInstance().Transmit(~checksum);
+    CTWController::GetInstance().Transmit(PN532_POSTAMBLE);
 
     // I2C STOP
-    uint8_t err = Firmware::GetInstance().GetTWController().EndTransmission();
+    CTWController::GetInstance().Stop();
   
 #ifdef DEBUG
     puthex(~checksum);
@@ -491,35 +490,31 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 	@return true if read was successful.
 */
 /*****************************************************************************/
-bool CNFCController::read_dt(uint8_t *buf, uint8_t len, uint8_t tries) {
-   uint8_t unStatus = PN532_I2C_BUSY;
-   // attempt to read response twenty times
-   for(uint8_t i = 0; i < tries; i++) {
-      if(tries != 1) Firmware::GetInstance().GetTimer().Delay(10);
+
+bool CNFCController::Read(uint8_t* pun_buffer, uint8_t un_length, uint8_t un_tries) {
+   /* attempt to read response x times */
+   for(uint8_t un_attempt = 0; un_attempt < un_tries; un_attempt++) {
+      if(un_tries != 1) Firmware::GetInstance().GetTimer().Delay(10);
       // Start read (n+1 to take into account leading 0x01 with I2C)
-      Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
-      // Read the status byte
-      unStatus = Firmware::GetInstance().GetTWController().Read();
-   
-      if(unStatus == PN532_I2C_READY) {
-         break;
+      CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::RECEIVE);
+      if(CTWController::GetInstance().Receive() == PN532_I2C_READY) {
+         /* read response */
+         for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
+            pun_buffer[un_index] = CTWController::GetInstance().Receive();
+         pun_buffer[un_length - 1] = CTWController::GetInstance().Receive(false);
+         CTWController::GetInstance().Stop();
+         return true;
       }
       else {
-         // flush the buffer
-         for(uint8_t i=0; i<len; i++) {
-            Firmware::GetInstance().GetTWController().Read();
-         }
+         /* flush */
+         for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
+            CTWController::GetInstance().Receive();
+         CTWController::GetInstance().Receive(false);
+         CTWController::GetInstance().Stop();
+         continue;
       }
    }
-
-   if(unStatus == PN532_I2C_READY) {
-      for(uint8_t i=0; i<len; i++) {
-         buf[i] = Firmware::GetInstance().GetTWController().Read();
-      }
-   }
-   // Discard trailing 0x00 0x00
-   // receive();
-   return (unStatus == PN532_I2C_READY);
+   return false;
 }
 
 /*****************************************************************************/
@@ -534,7 +529,15 @@ bool CNFCController::read_ack(void)
 {
    uint8_t ack_buf[6] = {0};
 
-   read_dt(ack_buf, 6);
+   Read(ack_buf, 6);
+
+   /*
+   fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+   for(uint8_t val : ack_buf) {
+      fprintf(Firmware::GetInstance().m_psHUART, "%x ", val);
+   }
+   fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+   */
 
    //    puthex(ack_buf, 6);
    //    Serial.println();

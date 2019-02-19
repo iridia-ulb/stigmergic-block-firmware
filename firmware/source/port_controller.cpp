@@ -1,7 +1,8 @@
 #include "port_controller.h"
 
 #include <avr/io.h>
-#include <firmware.h>
+#include <firmware.h> // remove this, include timer instead
+#include "tw_controller.h"
 
 #define NUM_FACES 6
 #define PORTC_TWCLK_MASK 0x20
@@ -37,15 +38,8 @@ CPortController::CPortController() :
 
 
 void CPortController::Init() {
-   /* Configure the port reset register */
-   Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::CONFIG));
    /* Configure the reset lines to the faces as outputs (driven high by default) */
-   Firmware::GetInstance().GetTWController().Write(0xC0);
-   Firmware::GetInstance().GetTWController().EndTransmission(true);
-
-   /* Note: in next hardware revision disable all faces on init */
-
+   CTWController::GetInstance().Write(PCA9554_RST_ADDR, EPCA9554Register::CONFIG, 0xC0);
    /* Enable external interrupt */
    EICRA &= ~EXT_INT0_SENSE_MASK;
    EICRA |= EXT_INT0_FALLING_EDGE;
@@ -57,13 +51,10 @@ void CPortController::Init() {
 
 void CPortController::SynchronizeInterrupts() {
    if(bSynchronizeRequired) {
-      /* read port */
-      Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_IRQ_ADDR);
-      Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::INPUT));
-      Firmware::GetInstance().GetTWController().EndTransmission(false);  
-      Firmware::GetInstance().GetTWController().Read(PCA9554_IRQ_ADDR, 1, true);
+      /* clear flag */
       bSynchronizeRequired = false;
-      uint8_t unRegisterState = Firmware::GetInstance().GetTWController().Read();
+      /* read port */
+      uint8_t unRegisterState = CTWController::GetInstance().Read(PCA9554_IRQ_ADDR, EPCA9554Register::INPUT);
       /* append detected falling edges to the interrupt vector */
       m_unInterrupts |= (unRegisterState ^ m_unLastRegisterState) & (~unRegisterState);
       /* store the synchronized state for the next sync */
@@ -96,36 +87,24 @@ uint8_t CPortController::GetInterrupts() {
 /***********************************************************/
 
 void CPortController::EnablePort(EPort e_target_port) {
-   Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
-   Firmware::GetInstance().GetTWController().EndTransmission(false);
-   Firmware::GetInstance().GetTWController().Read(PCA9554_RST_ADDR, 1, true);
-   uint8_t unPortState = Firmware::GetInstance().GetTWController().Read();
+   /* Read current configuration */
+   uint8_t unPortState = CTWController::GetInstance().Read(PCA9554_RST_ADDR, EPCA9554Register::OUTPUT);
    /* Enable the target port */
    unPortState |= (1 << static_cast<uint8_t>(e_target_port));
-   /* Write configuration back */
-   Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
-   Firmware::GetInstance().GetTWController().Write(unPortState);
-   Firmware::GetInstance().GetTWController().EndTransmission(true);
+   /* Write back updated configuration */
+   CTWController::GetInstance().Write(PCA9554_RST_ADDR, EPCA9554Register::OUTPUT, unPortState);
 }
 
 /***********************************************************/
 /***********************************************************/
 
 void CPortController::DisablePort(EPort e_target_port) {
-   Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
-   Firmware::GetInstance().GetTWController().EndTransmission(false);
-   Firmware::GetInstance().GetTWController().Read(PCA9554_RST_ADDR, 1, true);
-   uint8_t unPortState = Firmware::GetInstance().GetTWController().Read();
-   /* Disable the target port */
+   /* Read current configuration */
+   uint8_t unPortState = CTWController::GetInstance().Read(PCA9554_RST_ADDR, EPCA9554Register::OUTPUT);
+   /* Enable the target port */
    unPortState &= ~(1 << static_cast<uint8_t>(e_target_port));
-   /* Write configuration back */
-   Firmware::GetInstance().GetTWController().BeginTransmission(PCA9554_RST_ADDR);
-   Firmware::GetInstance().GetTWController().Write(static_cast<uint8_t>(EPCA9554Register::OUTPUT));
-   Firmware::GetInstance().GetTWController().Write(unPortState);
-   Firmware::GetInstance().GetTWController().EndTransmission(true);
+   /* Write back updated configuration */
+   CTWController::GetInstance().Write(PCA9554_RST_ADDR, EPCA9554Register::OUTPUT, unPortState);
 }
 
 /***********************************************************/

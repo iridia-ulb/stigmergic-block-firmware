@@ -77,10 +77,6 @@ public:
       return m_cHUARTController;
    }
 
-   CTWController& GetTWController() {
-      return m_cTWController;
-   }
-
    CTimer& GetTimer() {
       return m_cTimer;
    }
@@ -142,8 +138,7 @@ private:
                          TCNT1,
                          TIMER1_CAPT_vect_num,
                          TIMER1_COMPA_vect_num,
-                         TIMER1_COMPB_vect_num),
-      m_cTWController(CTWController::GetInstance()) {}
+                         TIMER1_COMPB_vect_num) {}
    
    CTimer m_cTimer;
 
@@ -175,8 +170,6 @@ private:
    HardwareSerial& m_cHUARTController;
    
    CTUARTController m_cTUARTController;
-
-   CTWController& m_cTWController;
 
    CNFCController m_cNFCController;
 

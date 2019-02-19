@@ -1,79 +1,175 @@
-/*
-  TwoWire.h - TWI/I2C library for Arduino & Wiring
-  Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-  Modified 2012 by Todd Krein (todd@krein.org) to implement repeated starts
-*/
-
-
 #ifndef TW_CONTROLLER_H
 #define TW_CONTROLLER_H
 
-#include <inttypes.h>
-
-#define TW_BUFFER_LENGTH 64
-#define TW_SCL_FREQ 100000L
-
-#define TW_STATE_READY 0
-#define TW_STATE_MRX   1
-#define TW_STATE_MTX   2
-
-#define TW_BUS_NO_ERROR 0xFF
+#include <stdint.h>
 
 class CTWController {
-private:
-   uint8_t m_punRxBuffer[TW_BUFFER_LENGTH];
-   uint8_t m_unRxBufferIndex;
-   uint8_t m_unRxBufferLength;
-
-   uint8_t m_unTxAddress;
-   uint8_t m_punTxBuffer[TW_BUFFER_LENGTH];
-   uint8_t m_unTxBufferIndex;
-   uint8_t m_unTxBufferLength;
-
-   bool m_bTransmitting;
-
 public:
-   void BeginTransmission(uint8_t);
-   uint8_t EndTransmission(bool b_send_stop = true);
 
-   void Enable();
-   void Disable();
+   /****************************************/
+   /****************************************/
 
-   virtual uint8_t Write(uint8_t un_data); // private? merge into method below
-   virtual uint8_t Write(const uint8_t* pun_data, uint8_t un_num_bytes); // b_send_stop
+   enum class EMode : uint8_t {
+      TRANSMIT = 0,
+      RECEIVE = 1,
+   };
 
-   uint8_t Read(uint8_t un_address, uint8_t un_length, bool b_send_stop = true);
+   /****************************************/
+   /****************************************/
 
-   virtual bool Available();
-   virtual uint8_t Read();
-   virtual uint8_t Peek();
-   virtual void Flush();
-  
    static CTWController& GetInstance() {
-      return m_cTWController;
+      static CTWController cInstance;
+      return cInstance;
    }
 
-private:
+   /****************************************/
+   /****************************************/
 
+   bool Write(uint8_t un_device, uint8_t un_length, const uint8_t* pun_data) {
+      StartWait(un_device, EMode::TRANSMIT);
+      for(uint8_t un_index = 0; un_index < un_length; un_index++)
+         Transmit(pun_data[un_index]);
+      Stop();
+      return true;
+   }
+
+   /****************************************/
+   /****************************************/
+
+   bool Write(uint8_t un_device, uint8_t un_data) {
+      return Write(un_device, 1, &un_data);
+   }
+
+   /****************************************/
+   /****************************************/
+
+   template<typename REGISTER_ID>
+   bool Write(uint8_t un_device, REGISTER_ID t_register, uint8_t un_length, const uint8_t* pun_data) {
+      StartWait(un_device, EMode::TRANSMIT);
+      Transmit(static_cast<uint8_t>(t_register));
+      for(uint8_t un_index = 0; un_index < un_length; un_index++)
+         Transmit(pun_data[un_index]);
+      Stop();
+      return true;
+   }
+
+   /****************************************/
+   /****************************************/
+
+   template<typename REGISTER_ID>
+   bool Write(uint8_t un_device, REGISTER_ID t_register, uint8_t un_data) {
+      return Write(un_device, t_register, 1, &un_data);
+   }
+
+   /****************************************/
+   /****************************************/
+
+   void Read(uint8_t un_device, uint8_t un_length, uint8_t* pun_data) {
+      StartWait(un_device, EMode::RECEIVE);
+      for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
+         pun_data[un_index] = Receive();
+      pun_data[un_length - 1] = Receive(false);
+      Stop();
+   }
+
+   /****************************************/
+   /****************************************/
+
+   uint8_t Read(uint8_t un_device) {
+      uint8_t unData;
+      Read(un_device, 1, &unData);
+      return unData;
+   }
+
+   /****************************************/
+   /****************************************/
+
+   template<typename REGISTER_ID>
+   void Read(uint8_t un_device, REGISTER_ID t_register, uint8_t un_length, uint8_t* pun_data) {
+      StartWait(un_device, EMode::TRANSMIT);
+      Transmit(static_cast<uint8_t>(t_register));
+      /* repeated start */
+      Start(un_device, EMode::RECEIVE);
+      for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
+         pun_data[un_index] = Receive();
+      pun_data[un_length - 1] = Receive(false);
+      Stop();
+   }
+
+   /****************************************/
+   /****************************************/
+
+   template<typename REGISTER_ID>
+   uint8_t Read(uint8_t un_device, REGISTER_ID t_register) {
+      uint8_t unData;
+      Read(un_device, t_register, 1, &unData);
+      return unData;
+   }
+
+   /****************************************/
+   /****************************************/
+
+   void Enable();
+
+   /****************************************/
+   /****************************************/
+
+   void Disable();
+
+   /****************************************/
+   /****************************************/
+
+   /**
+       @brief Terminates the data transfer and releases the I2C bus
+       @return none
+   */
+   void Stop();
+
+   /**
+       @brief Issues a start condition and sends address and transfer direction
+
+       @param    addr address and transfer direction of I2C device
+       @retval   0   device accessible
+       @retval   1   failed to access device
+   */
+   bool Start(uint8_t un_device, EMode e_mode);
+
+
+   /**
+      @brief Issues a start condition and sends address and transfer direction
+
+      If device is busy, use ack polling to wait until device ready
+      @param    addr address and transfer direction of I2C device
+      @return   none
+   */
+   void StartWait(uint8_t un_device, EMode e_mode);
+
+
+   /**
+      @brief Send one byte to I2C device
+      @param    data byte to be transfered
+      @retval   0 write successful
+      @retval   1 write failed
+   */
+   bool Transmit(uint8_t un_data);
+
+
+   /**
+      @brief    read one byte from the I2C device
+      @param    true if we will request more data
+      @return   byte read from I2C device
+   */
+   uint8_t Receive(bool b_continue = true);
+
+   /**
+      @brief waits for the transceiver to become ready
+   */
+   void Wait();
+
+private:
+   /* constructor */
    CTWController();
 
-   static CTWController m_cTWController;
 };
 
 #endif
-
