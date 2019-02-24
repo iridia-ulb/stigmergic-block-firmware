@@ -22,13 +22,11 @@ int main(void)
  
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
-                        //Firmware::GetInstance().GetTimer().Delay(1);
-                        CHUARTController::GetInstance().Write(c_to_write);
-                        //Firmware::GetInstance().GetHUARTController().Write(c_to_write);
+                        Firmware::GetInstance().GetHUARTController().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        return static_cast<int>(CHUARTController::GetInstance().Read());
+                        return int(Firmware::GetInstance().GetHUARTController().Read());
                      },
                      _FDEV_SETUP_RW);
 
@@ -388,7 +386,7 @@ int Firmware::Exec() {
    PORTD &= ~PWR_MON_MASK; // disable pull ups
 
    /* Enable interrupts */
-   CInterruptController::GetInstance().Enable();
+   sei();
   
    /* Begin Init */
    fprintf(m_psOutputUART, "[%05lu] Stigmergic Block Initialization\r\n", m_cTimer.GetMilliseconds());
@@ -459,15 +457,165 @@ int Firmware::Exec() {
    }
    */
 
-   for(;;) {
-      if(CHUARTController::GetInstance().HasData()) {
-         uint8_t c = CHUARTController::GetInstance().Read();
-         CHUARTController::GetInstance().Write(c);
-         CHUARTController::GetInstance().Write(' ');
-      }
-   }
+   InteractiveMode();
 
    return 0;
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void Firmware::InteractiveMode() {
+   uint8_t unInput = 0;
+
+   CPortController::EPort eTxPort = m_peConnectedPorts[0];
+
+   for(;;) {
+      if(bHasXbee) {
+         if(Firmware::GetInstance().GetTUARTController().Available()) {
+            unInput = Firmware::GetInstance().GetTUARTController().Read();
+            /* flush */
+            while(Firmware::GetInstance().GetTUARTController().Available()) {
+               Firmware::GetInstance().GetTUARTController().Read();
+            }
+         }
+         else {
+            unInput = 0;
+         }
+      }
+      else {
+         if(Firmware::GetInstance().GetHUARTController().Available()) {
+            unInput = Firmware::GetInstance().GetHUARTController().Read();
+            /* flush */
+            while(Firmware::GetInstance().GetHUARTController().Available()) {
+               Firmware::GetInstance().GetHUARTController().Read();
+            }
+         }
+         else {
+            unInput = 0;
+         }
+      }
+      switch(unInput) {
+      case 'a':
+         TestAccelerometer();
+         break;
+      case 'b':
+         // assumes divider with 330k and 1M
+         fprintf(m_psOutputUART,
+                 "Battery = %umV\r\n", 
+                 m_cADCController.GetValue(CADCController::EChannel::ADC7) * 17);
+         break;
+      case '1':
+         /* Q1 (U+, V+) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
+            }
+         }
+         break;
+      case '2':
+         /* Q2 (U-, V+) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
+            }
+         }
+         break;
+      case '3':
+         /* Q3 (U-, V-) */
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+            }
+         }
+         break;
+      case '4':
+         /* Q4 (U+, V-) */        
+         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+            if(eConnectedPort != CPortController::EPort::NULLPORT) {
+               m_cPortController.SelectPort(eConnectedPort);
+               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+            }
+         }
+         break;
+      case 'l':
+         TestLEDs();
+         break;
+      case 'r':
+         Reset();
+         break;
+      case 't':
+         m_cPortController.SelectPort(CPortController::EPort::TOP);
+         while(TestNFCTx() != CNFCController::EStatus::READY) {
+            m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
+            fprintf(m_psOutputUART, ".");
+            m_cPortController.SelectPort(CPortController::EPort::TOP);
+         }
+         break;
+      case 'p':
+         TestPMIC();
+         break;
+      case 'u':
+         fprintf(m_psOutputUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
+         break;
+      default:
+         m_cPortController.SynchronizeInterrupts();
+         if(m_cPortController.HasInterrupts()) {
+            uint8_t unIRQs = m_cPortController.GetInterrupts();
+            fprintf(m_psOutputUART, "irq(0x%02X)\r\n", unIRQs);
+            for(CPortController::EPort eRxPort : m_peConnectedPorts) {
+               if(eRxPort != CPortController::EPort::NULLPORT) {
+                  if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
+                     m_cPortController.SelectPort(eRxPort);
+                     uint8_t punOutboundBuffer[] = {'S','B','0','1'};
+                     uint8_t punInboundBuffer[8];
+                     uint8_t unRxCount = 0;
+
+                     if(m_cNFCController.P2PTargetInit()) {
+                        unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer, 4, punInboundBuffer, 8);
+                     }
+                     m_cTimer.Delay(60);
+                     m_cNFCController.PowerDown();
+                     m_cTimer.Delay(100);
+                     m_cPortController.ClearInterrupts();
+
+                     for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
+                        if(eConnectedPort != CPortController::EPort::NULLPORT) {
+                           m_cPortController.SelectPort(eConnectedPort);
+                           CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
+                           switch(punInboundBuffer[0]) {
+                           case '1':
+                              // Q1 (U+, V+)
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
+                              break;
+                           case '2':
+                              // Q2 (U-, V+)
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
+                              break;
+                           case '3':
+                              // Q3 (U-, V-)
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
+                              break;
+                           case '4':
+                              // Q4 (U+, V-)
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
+                              break;
+                           default:
+                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
+                              break;
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+         break;
+      }
+   }
 }
 
 /***********************************************************/
