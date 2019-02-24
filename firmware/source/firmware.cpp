@@ -20,13 +20,15 @@ int main(void)
                      },
                      _FDEV_SETUP_RW);
  
+
+
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
-                        Firmware::GetInstance().GetHUARTController().Write(c_to_write);
+                        CHUARTController::GetInstance().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        return int(Firmware::GetInstance().GetHUARTController().Read());
+                        return static_cast<int>(CHUARTController::GetInstance().Read());
                      },
                      _FDEV_SETUP_RW);
 
@@ -386,7 +388,7 @@ int Firmware::Exec() {
    PORTD &= ~PWR_MON_MASK; // disable pull ups
 
    /* Enable interrupts */
-   sei();
+   CInterruptController::GetInstance().Enable();
   
    /* Begin Init */
    fprintf(m_psOutputUART, "[%05lu] Stigmergic Block Initialization\r\n", m_cTimer.GetMilliseconds());
@@ -484,11 +486,11 @@ void Firmware::InteractiveMode() {
          }
       }
       else {
-         if(Firmware::GetInstance().GetHUARTController().Available()) {
-            unInput = Firmware::GetInstance().GetHUARTController().Read();
+         if(CHUARTController::GetInstance().HasData()) {
+            unInput = CHUARTController::GetInstance().Read();
             /* flush */
-            while(Firmware::GetInstance().GetHUARTController().Available()) {
-               Firmware::GetInstance().GetHUARTController().Read();
+            while(CHUARTController::GetInstance().HasData()) {
+               CHUARTController::GetInstance().Read();
             }
          }
          else {
