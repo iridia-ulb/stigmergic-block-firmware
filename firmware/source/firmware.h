@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 /* Firmware Headers */
-#include <huart_controller.h>
+//#include <huart_controller.h>
 #include <tuart_controller.h>
 #include <tw_controller.h>
 #include <nfc_controller.h>
@@ -73,9 +73,11 @@ public:
       return m_cHUARTController;
    }
    */
+   /*
    HardwareSerial& GetHUARTController() {
       return m_cHUARTController;
    }
+   */
 
    CTimer& GetTimer() {
       return m_cTimer;
@@ -126,7 +128,6 @@ private:
                TCNT0,
                TIMER0_OVF_vect_num),
       m_cPortController(),
-      m_cHUARTController(HardwareSerial::instance()),
       m_cTUARTController(9600,
                          TCCR1A,
                          TCCR1B,
@@ -167,7 +168,7 @@ private:
    /* ATMega328P Controllers */
    /* TODO remove singleton and reference from HUART */
    //CHUARTController& m_cHUARTController;
-   HardwareSerial& m_cHUARTController;
+   //HardwareSerial& m_cHUARTController;
    
    CTUARTController m_cTUARTController;
 
