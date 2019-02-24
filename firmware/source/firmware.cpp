@@ -10,9 +10,6 @@ int main(void)
    /* FILE structs for fprintf */
    FILE tuart, huart;
 
-   uart_init();
-   
-
    /* Set up FILE structs for fprintf */                           
    fdev_setup_stream(&tuart,
                      [](char c_to_write, FILE* pf_stream) {
@@ -26,12 +23,12 @@ int main(void)
  
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
-                        uart_putc(c_to_write);
+                        CHUARTController::GetInstance().uart_putc(c_to_write);
                         //Firmware::GetInstance().GetHUARTController().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        unsigned int res = uart_getc();                                              
+                        unsigned int res = CHUARTController::GetInstance().uart_getc();                                           
                         return static_cast<int>(res & 0x00ff);
                      },
                      _FDEV_SETUP_RW);
@@ -464,9 +461,9 @@ int Firmware::Exec() {
    */
 
    for(;;) {
-      if(unsigned char c = uart_getc() & 0x00ff) {
-         uart_putc(c);
-         uart_putc(' ');
+      if(unsigned char c = CHUARTController::GetInstance().uart_getc() & 0x00ff) {
+         CHUARTController::GetInstance().uart_putc(c);
+         CHUARTController::GetInstance().uart_putc(' ');
       }
    }
 

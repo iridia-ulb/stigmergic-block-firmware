@@ -1,5 +1,5 @@
-#ifndef UART_H
-#define UART_H
+#ifndef HUART_CONTROLLER_H
+#define HUART_CONTROLLER_H
 
 #define UART_RX_BUFFER_SIZE 32
 #define UART_TX_BUFFER_SIZE 32
@@ -13,8 +13,14 @@
 #define UART_BUFFER_OVERFLOW  0x0200              /**< @brief receive ringbuffer overflow */
 #define UART_NO_DATA          0x0100              /**< @brief no receive data available   */
 
-extern void uart_init();
+class CHUARTController {
 
+public:
+
+   static CHUARTController& GetInstance() {
+      static CHUARTController cInstance;
+      return cInstance;
+   }
 
 /**
  *  @return  lower byte:  received byte from ringbuffer
@@ -34,8 +40,13 @@ extern void uart_init();
  *           - \b UART_FRAME_ERROR       
  *             <br>Framing Error by UART
  */
-extern unsigned int uart_getc(void);
-extern void uart_putc(unsigned char data);
+   unsigned int uart_getc();
+   void uart_putc(unsigned char data);
+private:
+
+   CHUARTController();
+
+};
 
 #endif
 

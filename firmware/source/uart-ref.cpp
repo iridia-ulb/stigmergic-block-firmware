@@ -1,41 +1,4 @@
-/*************************************************************************
-Title:    Interrupt UART library with receive/transmit circular buffers
-Author:   Peter Fleury <pfleury@gmx.ch>   http://tinyurl.com/peterfleury
-File:     $Id: uart.c,v 1.15.2.4 2015/09/05 18:33:32 peter Exp $
-Software: AVR-GCC 4.x
-Hardware: any AVR with built-in UART, 
-License:  GNU General Public License 
-          
-DESCRIPTION:
-    An interrupt is generated when the UART has finished transmitting or
-    receiving a byte. The interrupt handling routines use circular buffers
-    for buffering received and transmitted data.
-    
-    The UART_RX_BUFFER_SIZE and UART_TX_BUFFER_SIZE variables define
-    the buffer size in bytes. Note that these variables must be a 
-    power of 2.
-    
-USAGE:
-    Refere to the header file uart.h for a description of the routines. 
-    See also example test_uart.c.
 
-NOTES:
-    Based on Atmel Application Note AVR306
-                    
-LICENSE:
-    Copyright (C) 2015 Peter Fleury, GNU General Public License Version 3
-
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-                        
-*************************************************************************/
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include "uart-ref.h"
@@ -118,7 +81,7 @@ Returns:  none
 **************************************************************************/
 #define UART_BAUD_SELECT(baudRate,xtalCpu)  (((xtalCpu) + 8UL * (baudRate)) / (16UL * (baudRate)) -1UL)
 
-void uart_init()
+CHUARTController::CHUARTController()
 {
     unsigned int baudrate = UART_BAUD_SELECT(57600, F_CPU);
 
@@ -150,7 +113,7 @@ Purpose:  return byte from ringbuffer
 Returns:  lower byte:  received byte from ringbuffer
           higher byte: last receive error
 **************************************************************************/
-unsigned int uart_getc(void)
+unsigned int CHUARTController::uart_getc(void)
 {    
     unsigned char tmptail;
     unsigned char data;
@@ -183,7 +146,7 @@ Purpose:  write byte to ringbuffer for transmitting via UART
 Input:    byte to be transmitted
 Returns:  none          
 **************************************************************************/
-void uart_putc(unsigned char data)
+void CHUARTController::uart_putc(unsigned char data)
 {
     unsigned char tmphead;
 
