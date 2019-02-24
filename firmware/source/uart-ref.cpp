@@ -1,28 +1,42 @@
 
 #include <avr/io.h>
-#include <avr/interrupt.h>
 #include "uart-ref.h"
 
 #define UART_RX_BUFFER_MASK ( UART_RX_BUFFER_SIZE - 1)
 #define UART_TX_BUFFER_MASK ( UART_TX_BUFFER_SIZE - 1)
 
-/*
- *  module global variables
- */
-static volatile unsigned char UART_TxBuf[UART_TX_BUFFER_SIZE];
-static volatile unsigned char UART_RxBuf[UART_RX_BUFFER_SIZE];
-static volatile unsigned char UART_TxHead;
-static volatile unsigned char UART_TxTail;
-static volatile unsigned char UART_RxHead;
-static volatile unsigned char UART_RxTail;
-static volatile unsigned char UART_LastRxError;
 
-ISR (USART_RX_vect)	
-/*************************************************************************
-Function: UART Receive Complete interrupt
-Purpose:  called when the UART has received a character
-**************************************************************************/
-{
+CHUARTController::CTransmitInterrupt::CTransmitInterrupt(CHUARTController* pc_huart_controller) :
+   m_pcHUARTController(pc_huart_controller),
+   m_unHead(0u),
+   m_unTail(0u) {
+   Register(this, USART_UDRE_vect_num);
+}
+
+void CHUARTController::CTransmitInterrupt::ServiceRoutine() {
+    unsigned char tmptail;
+    
+    if ( m_unHead != m_unTail) {
+        /* calculate and store new buffer index */
+        tmptail = (m_unTail + 1) & UART_TX_BUFFER_MASK;
+        m_unTail = tmptail;
+        /* get one byte from buffer and write it to UART */
+        UDR0 = m_punBuf[tmptail];  /* start transmission */
+    }else{
+        /* tx buffer empty, disable UDRE interrupt */
+        UCSR0B &= ~_BV(UDRIE0);
+    }
+
+}
+
+CHUARTController::CReceiveInterrupt::CReceiveInterrupt(CHUARTController* pc_huart_controller) :
+   m_pcHUARTController(pc_huart_controller),
+   m_unHead(0u),
+   m_unTail(0u) {
+   Register(this, USART_RX_vect_num);
+}
+
+void CHUARTController::CReceiveInterrupt::ServiceRoutine() {
     unsigned char tmphead;
     unsigned char data;
     unsigned char usr;
@@ -36,59 +50,28 @@ Purpose:  called when the UART has received a character
     lastRxError = usr & ( _BV(FE0) | _BV(DOR0) | _BV(UPE0) );
 
     /* calculate buffer index */ 
-    tmphead = ( UART_RxHead + 1) & UART_RX_BUFFER_MASK;
+    tmphead = ( m_unHead + 1) & UART_RX_BUFFER_MASK;
     
-    if ( tmphead == UART_RxTail ) {
+    if ( tmphead == m_unTail ) {
         /* error: receive buffer overflow */
         lastRxError = UART_BUFFER_OVERFLOW >> 8;
     }else{
         /* store new index */
-        UART_RxHead = tmphead;
+        m_unHead = tmphead;
         /* store received data in buffer */
-        UART_RxBuf[tmphead] = data;
+        m_punBuf[tmphead] = data;
     }
-    UART_LastRxError |= lastRxError;   
+    m_unLastError |= lastRxError;
 }
 
 
-ISR (USART_UDRE_vect)
-/*************************************************************************
-Function: UART Data Register Empty interrupt
-Purpose:  called when the UART is ready to transmit the next byte
-**************************************************************************/
-{
-    unsigned char tmptail;
-
-    
-    if ( UART_TxHead != UART_TxTail) {
-        /* calculate and store new buffer index */
-        tmptail = (UART_TxTail + 1) & UART_TX_BUFFER_MASK;
-        UART_TxTail = tmptail;
-        /* get one byte from buffer and write it to UART */
-        UDR0 = UART_TxBuf[tmptail];  /* start transmission */
-    }else{
-        /* tx buffer empty, disable UDRE interrupt */
-        UCSR0B &= ~_BV(UDRIE0);
-    }
-}
-
-
-/*************************************************************************
-Function: uart_init()
-Purpose:  initialize UART and set baudrate
-Input:    baudrate using macro UART_BAUD_SELECT()
-Returns:  none
-**************************************************************************/
 #define UART_BAUD_SELECT(baudRate,xtalCpu)  (((xtalCpu) + 8UL * (baudRate)) / (16UL * (baudRate)) -1UL)
 
-CHUARTController::CHUARTController()
-{
-    unsigned int baudrate = UART_BAUD_SELECT(57600, F_CPU);
+CHUARTController::CHUARTController() :
+   m_cTransmitInterrupt(this),
+   m_cReceiveInterrupt(this) {
 
-    UART_TxHead = 0;
-    UART_TxTail = 0;
-    UART_RxHead = 0;
-    UART_RxTail = 0;
+    unsigned int baudrate = UART_BAUD_SELECT(57600, F_CPU);
 
     /* Set baud rate */
     if ( baudrate & 0x8000 )
@@ -113,28 +96,29 @@ Purpose:  return byte from ringbuffer
 Returns:  lower byte:  received byte from ringbuffer
           higher byte: last receive error
 **************************************************************************/
-unsigned int CHUARTController::uart_getc(void)
+unsigned int CHUARTController::CReceiveInterrupt::Read()
 {    
     unsigned char tmptail;
     unsigned char data;
     unsigned char lastRxError;
 
 
-    if ( UART_RxHead == UART_RxTail ) {
+
+    if ( m_unHead == m_unTail ) {
         return UART_NO_DATA;   /* no data available */
     }
     
     /* calculate buffer index */
-    tmptail = (UART_RxTail + 1) & UART_RX_BUFFER_MASK;
+    tmptail = (m_unTail + 1) & UART_RX_BUFFER_MASK;
     
     /* get data from receive buffer */
-    data = UART_RxBuf[tmptail];
-    lastRxError = UART_LastRxError;
+    data = m_punBuf[tmptail];
+    lastRxError = m_unLastError;
     
     /* store buffer index */
-    UART_RxTail = tmptail; 
+    m_unTail = tmptail; 
     
-    UART_LastRxError = 0;
+    m_unLastError = 0;
     return (lastRxError << 8) + data;
 
 }/* uart_getc */
@@ -146,19 +130,19 @@ Purpose:  write byte to ringbuffer for transmitting via UART
 Input:    byte to be transmitted
 Returns:  none          
 **************************************************************************/
-void CHUARTController::uart_putc(unsigned char data)
+void CHUARTController::CTransmitInterrupt::Write(unsigned char data)
 {
     unsigned char tmphead;
 
     
-    tmphead  = (UART_TxHead + 1) & UART_TX_BUFFER_MASK;
+    tmphead  = (m_unHead + 1) & UART_TX_BUFFER_MASK;
     
-    while ( tmphead == UART_TxTail ){
+    while ( tmphead == m_unTail ){
         ;/* wait for free space in buffer */
     }
     
-    UART_TxBuf[tmphead] = data;
-    UART_TxHead = tmphead;
+    m_punBuf[tmphead] = data;
+    m_unHead = tmphead;
 
     /* enable UDRE interrupt */
     UCSR0B    |= _BV(UDRIE0);

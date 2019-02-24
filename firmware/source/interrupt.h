@@ -30,8 +30,8 @@ private:
    // static void Handler15() __asm__("__vector_15") __attribute__((__signal__, __used__, __externally_visible__));
    static void Handler16() __asm__("__vector_16") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler17() __asm__("__vector_17") __attribute__((__signal__, __used__, __externally_visible__));
-   // static void Handler18() __asm__("__vector_18") __attribute__((__signal__, __used__, __externally_visible__));
-   // static void Handler19() __asm__("__vector_19") __attribute__((__signal__, __used__, __externally_visible__));
+   static void Handler18() __asm__("__vector_18") __attribute__((__signal__, __used__, __externally_visible__));
+   static void Handler19() __asm__("__vector_19") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler20() __asm__("__vector_20") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler21() __asm__("__vector_21") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler22() __asm__("__vector_22") __attribute__((__signal__, __used__, __externally_visible__));

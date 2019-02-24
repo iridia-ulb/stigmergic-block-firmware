@@ -1,6 +1,8 @@
 #ifndef HUART_CONTROLLER_H
 #define HUART_CONTROLLER_H
 
+#include "interrupt.h"
+
 #define UART_RX_BUFFER_SIZE 32
 #define UART_TX_BUFFER_SIZE 32
 
@@ -40,9 +42,47 @@ public:
  *           - \b UART_FRAME_ERROR       
  *             <br>Framing Error by UART
  */
-   unsigned int uart_getc();
-   void uart_putc(unsigned char data);
+
+   unsigned int uart_getc() {
+      return m_cReceiveInterrupt.Read();
+   }
+
+   void uart_putc(unsigned char data) {
+      m_cTransmitInterrupt.Write(data);
+   }
+
 private:
+
+   class CTransmitInterrupt : public CInterrupt {
+   private:
+      CHUARTController* m_pcHUARTController;
+      volatile unsigned char m_unHead;
+      volatile unsigned char m_unTail;
+      volatile unsigned char m_punBuf[UART_TX_BUFFER_SIZE];
+
+      void ServiceRoutine();
+   public:
+      CTransmitInterrupt(CHUARTController* pc_huart_controller);
+
+      void Write(unsigned char data);
+
+   } m_cTransmitInterrupt;
+
+   class CReceiveInterrupt : public CInterrupt {
+   private:
+      CHUARTController* m_pcHUARTController;
+      volatile unsigned char m_unHead;
+      volatile unsigned char m_unTail;
+      volatile unsigned char m_unLastError;
+      volatile unsigned char m_punBuf[UART_RX_BUFFER_SIZE];
+
+      void ServiceRoutine();
+   public:
+      CReceiveInterrupt(CHUARTController* pc_huart_controller);
+
+      unsigned int Read();
+
+   } m_cReceiveInterrupt;
 
    CHUARTController();
 

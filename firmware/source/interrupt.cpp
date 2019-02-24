@@ -97,15 +97,15 @@ void CInterrupt::Handler16() {
 //       ppcInterruptOwner[16]->ServiceRoutine();
 // }
 
-// void CInterrupt::Handler18() {
-//    if(ppcInterruptOwner[17])
-//       ppcInterruptOwner[17]->ServiceRoutine();
-// }
+void CInterrupt::Handler18() {
+   if(ppcInterruptOwner[17])
+      ppcInterruptOwner[17]->ServiceRoutine();
+}
 
-// void CInterrupt::Handler19() {
-//    if(ppcInterruptOwner[18])
-//       ppcInterruptOwner[18]->ServiceRoutine();
-// }
+void CInterrupt::Handler19() {
+   if(ppcInterruptOwner[18])
+      ppcInterruptOwner[18]->ServiceRoutine();
+}
 
 // void CInterrupt::Handler20() {
 //    if(ppcInterruptOwner[19])

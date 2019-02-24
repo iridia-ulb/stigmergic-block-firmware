@@ -23,6 +23,7 @@ int main(void)
  
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
+                        //Firmware::GetInstance().GetTimer().Delay(1);
                         CHUARTController::GetInstance().uart_putc(c_to_write);
                         //Firmware::GetInstance().GetHUARTController().Write(c_to_write);
                         return 1;
