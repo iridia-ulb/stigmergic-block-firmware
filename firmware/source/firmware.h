@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 /* Firmware Headers */
-//#include <huart_controller.h>
+#include <huart_controller.h>
 #include <tuart_controller.h>
 #include <tw_controller.h>
 #include <nfc_controller.h>

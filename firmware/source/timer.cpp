@@ -95,14 +95,9 @@ CTimer::CTimer(volatile uint8_t& un_ctrl_reg_a,
 
 uint32_t CTimer::GetMilliseconds() {
    uint32_t m;
-   uint8_t oldSREG = SREG;
-
-   // disable interrupts while we read m_unTimerMilliseconds or we might get an
-   // inconsistent value (e.g. in the middle of a write to m_unTimerMilliseconds)
-   cli();
+   CInterruptController::GetInstance().Disable();
    m = m_unTimerMilliseconds;
-   SREG = oldSREG;
-
+   CInterruptController::GetInstance().Enable();
    return m;
 }
 

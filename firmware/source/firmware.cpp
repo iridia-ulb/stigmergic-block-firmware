@@ -1,5 +1,4 @@
 #include "firmware.h"
-#include "uart-ref.h"
 
 /* initialisation of the static singleton */
 Firmware Firmware::_firmware;
@@ -24,13 +23,12 @@ int main(void)
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
                         //Firmware::GetInstance().GetTimer().Delay(1);
-                        CHUARTController::GetInstance().uart_putc(c_to_write);
+                        CHUARTController::GetInstance().Write(c_to_write);
                         //Firmware::GetInstance().GetHUARTController().Write(c_to_write);
                         return 1;
                      },
                      [](FILE* pf_stream) {
-                        unsigned int res = CHUARTController::GetInstance().uart_getc();                                           
-                        return static_cast<int>(res & 0x00ff);
+                        return static_cast<int>(CHUARTController::GetInstance().Read());
                      },
                      _FDEV_SETUP_RW);
 
@@ -390,7 +388,7 @@ int Firmware::Exec() {
    PORTD &= ~PWR_MON_MASK; // disable pull ups
 
    /* Enable interrupts */
-   sei();
+   CInterruptController::GetInstance().Enable();
   
    /* Begin Init */
    fprintf(m_psOutputUART, "[%05lu] Stigmergic Block Initialization\r\n", m_cTimer.GetMilliseconds());
@@ -462,9 +460,10 @@ int Firmware::Exec() {
    */
 
    for(;;) {
-      if(unsigned char c = CHUARTController::GetInstance().uart_getc() & 0x00ff) {
-         CHUARTController::GetInstance().uart_putc(c);
-         CHUARTController::GetInstance().uart_putc(' ');
+      if(CHUARTController::GetInstance().HasData()) {
+         uint8_t c = CHUARTController::GetInstance().Read();
+         CHUARTController::GetInstance().Write(c);
+         CHUARTController::GetInstance().Write(' ');
       }
    }
 

@@ -1,7 +1,8 @@
 #include "interrupt.h"
 
+
+#include <avr/interrupt.h>
 // http://www.mikrocontroller.net/articles/AVR_Interrupt_Routinen_mit_C%2B%2B
-//#include <avr/interrupt.h>
 
 /* Initialise the owner array */
 CInterrupt* CInterrupt::ppcInterruptOwner[] = {0};
@@ -136,4 +137,29 @@ void CInterrupt::Handler19() {
 //    if(ppcInterruptOwner[24])
 //       ppcInterruptOwner[24]->ServiceRoutine();
 // }
+
+CInterruptController& CInterruptController::GetInstance() {
+   static CInterruptController cInstance;
+   return cInstance;
+}
+
+void CInterruptController::Disable() {
+   if(m_bEnabled) {
+      m_unPrevStatusRegState = SREG;
+      cli();
+      m_bEnabled = false;
+   }
+}
+
+void CInterruptController::Enable() {
+   if(!m_bEnabled) {
+      m_bEnabled = true;
+      SREG = m_unPrevStatusRegState;
+   }
+}
+
+CInterruptController::CInterruptController() :
+   m_bEnabled(true) {
+   sei();
+}
 

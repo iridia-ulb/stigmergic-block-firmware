@@ -1,12 +1,13 @@
 #ifndef INTERRUPT_H
 #define INTERRUPT_H
 
-//#include <avr/interrupt.h>
-//#include <avr/io.h>
 #include <stdint.h>
 // http://www.mikrocontroller.net/articles/AVR_Interrupt_Routinen_mit_C%2B%2B
 
 class CInterrupt {
+
+public:
+   static void Register(CInterrupt* pc_interrupt, uint8_t un_intr_vect_num);
 
 private:
    /* Owner Array */
@@ -39,13 +40,28 @@ private:
    // static void Handler24() __asm__("__vector_24") __attribute__((__signal__, __used__, __externally_visible__));
    // static void Handler25() __asm__("__vector_25") __attribute__((__signal__, __used__, __externally_visible__));
    
+private:
+
+   virtual void ServiceRoutine() = 0;
+};
+
+class CInterruptController {
+public:
+
+   static CInterruptController& GetInstance();
+
+   void Disable();
+
+   void Enable();
 
 private:
-   virtual void ServiceRoutine() = 0;
 
-public:
-   static void Register(CInterrupt* pc_interrupt, uint8_t un_intr_vect_num);
-   
+   CInterruptController();
+
+   uint8_t m_unPrevStatusRegState;
+
+   bool m_bEnabled;
+
 };
 
 #endif
