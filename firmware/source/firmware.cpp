@@ -126,7 +126,7 @@ bool Firmware::InitXbee() {
    while(bInitInProgress) {
       switch(eInitXbeeState) {
       case EInitXbeeState::RESET:
-         fprintf(m_psOutputUART, "XBEE RESET\r\n");
+         fprintf(m_psOutputUART, "XB_RST\r\n");
          PORTD &= ~XBEE_RST_PIN; // drive xbee reset pin low (enable)
          DDRD |= XBEE_RST_PIN;   // set xbee reset pin as output
          m_cTimer.Delay(50);
@@ -139,7 +139,7 @@ bool Firmware::InitXbee() {
          if(unAttempts > 3) {
             
          }
-         fprintf(m_psOutputUART, "CONFIG_TX\r\n");
+         fprintf(m_psOutputUART, "XB_CFG_TX\r\n");
          for(uint8_t unCmdCharIdx = 0;
              ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\0';
              unCmdCharIdx++) {
@@ -152,7 +152,7 @@ bool Firmware::InitXbee() {
          continue;
          break;
       case EInitXbeeState::CONFIG_WAIT_FOR_RX: // RX_ACK
-         fprintf(m_psOutputUART, "CONFIG_WAIT_FOR_RX\r\n");
+         fprintf(m_psOutputUART, "XB_CFG_RX\r\n");
          m_cTimer.Delay(250);
          while(m_cTUARTController.Available() && sRxBuffer.Index < 8) {
             sRxBuffer.Buffer[sRxBuffer.Index++] = m_cTUARTController.Read();
@@ -234,10 +234,10 @@ void Firmware::TestAccelerometer() {
    uint8_t punBuffer[8];
    CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::ACCEL_XOUT_H, 8, punBuffer);
    fprintf(m_psOutputUART, 
-           "Acc[x] = %i\r\n"
-           "Acc[y] = %i\r\n"
-           "Acc[z] = %i\r\n"
-           "Temp = %i\r\n",
+           "X = %i\r\n"
+           "Y = %i\r\n"
+           "Z = %i\r\n"
+           "T = %i\r\n",
            int16_t((punBuffer[0] << 8) | punBuffer[1]),
            int16_t((punBuffer[2] << 8) | punBuffer[3]),
            int16_t((punBuffer[4] << 8) | punBuffer[5]),
