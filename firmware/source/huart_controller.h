@@ -38,7 +38,9 @@ private:
    /***********************************************************/
 
    class CTransmitInterrupt : public CInterrupt {
+
    public:
+
       CTransmitInterrupt(CHUARTController* pc_huart_controller);
 
       void Write(uint8_t data);
