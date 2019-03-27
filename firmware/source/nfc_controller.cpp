@@ -6,9 +6,14 @@ uint8_t ack[6]={
     0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00
 };
 
-uint8_t nfc_version[6]={
-    0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03
+const uint8_t CNFCController::m_punFirmwareVersion[] = {
+    0x32, /* IC:        PN532 */
+    0x01, /* Version:   1 */
+    0x06, /* Revision:  6 */
+    0x07, /* Support:   7 */
 };
+
+uint8_t CNFCController::m_punIOBuffer[] = {0};
 
 /***********************************************************/
 /***********************************************************/
@@ -38,11 +43,11 @@ bool CNFCController::PowerDown() {
       return false;
    }
    /* check the lower 6 bits of the status byte, error code 0x00 means success */
-   if((m_punIOBuffer[NFC_FRAME_STATUS_INDEX] & 0x3F) != 0x00) {
+   if((m_punIOBuffer[NFC_FRAME_DATA_INDEX] & 0x3F) != 0x00) {
 #ifdef DEBUG
       fprintf(Firmware::GetInstance().m_psTUART, 
               "Status byte contained error: 0x%02x\r\n",
-              m_punIOBuffer[NFC_FRAME_STATUS_INDEX] & 0x3F);
+              m_punIOBuffer[NFC_FRAME_DATA_INDEX] & 0x3F);
 #endif
       return false;
    }
@@ -52,21 +57,49 @@ bool CNFCController::PowerDown() {
 /***********************************************************/
 /***********************************************************/
 
-bool CNFCController::Probe() {
-   m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION);
-   /* write command and check ack frame */
-   if(!write_cmd_check_ack(m_punIOBuffer, 1)) {
-      return false;
+bool CNFCController::FrameIsResponseTo(ECommand e_command) {
+   return (m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] == PN532_PN532TOHOST &&
+           m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 == static_cast<uint8_t>(e_command));
+}
+
+/***********************************************************/
+/***********************************************************/
+
+void CNFCController::Probe() {
+   switch(m_eStatus) {
+   case EStatus::FAILED:
+   case EStatus::READY:
+      m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION);
+      /* write command and check ack frame */
+      write_cmd(m_punIOBuffer, 1);
+      m_eStatus = EStatus::WAIT_ACK;
+      break;
+   case EStatus::WAIT_ACK:
+      if(read_ack()) {
+         m_eStatus = EStatus::WAIT_RESP;
+      }
+      else {
+         m_eStatus = EStatus::FAILED;
+      }
+      break;
+   case EStatus::WAIT_RESP:
+      Read(m_punIOBuffer, 12);
+      /* verify that the recieved data was a reply frame to given command */
+      if(FrameIsResponseTo(ECommand::GETFIRMWAREVERSION)) {
+         m_eStatus = EStatus::READY;
+         /* check the firmware version */
+         for(uint8_t un_index = 0; un_index < sizeof m_punFirmwareVersion; un_index++) {
+            if(m_punIOBuffer[un_index + NFC_FRAME_DATA_INDEX] != m_punFirmwareVersion[un_index]) {
+               m_eStatus = EStatus::FAILED;
+               break;
+            }
+         }
+      }
+      else {
+         m_eStatus = EStatus::FAILED;
+      }
+      break;
    }
-   /* read the rest of the reply */
-   Read(m_punIOBuffer, 12);
-   /* verify that the recieved data was a reply frame to given command */
-   if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
-      m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::GETFIRMWAREVERSION)) {
-      return false;
-   }
-   /* check the firmware version */
-   return (strncmp((char *)m_punIOBuffer, (char *)nfc_version, 6) == 0);
 }
 
 /*****************************************************************************/
@@ -83,7 +116,7 @@ bool CNFCController::ConfigureSAM(ESAMMode e_mode, uint8_t un_timeout, bool b_us
     m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::SAMCONFIGURATION);
     m_punIOBuffer[1] = static_cast<uint8_t>(e_mode);
     m_punIOBuffer[2] = un_timeout; // timeout = 50ms * un_timeout
-    m_punIOBuffer[3] = b_use_irq?1u:0u; // use IRQ pin
+    m_punIOBuffer[3] = b_use_irq ? 1u : 0u; // use IRQ pin
     /* write command */
     if(!write_cmd_check_ack(m_punIOBuffer, 4)){
        return false;
@@ -247,8 +280,8 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
                                          uint8_t  un_tx_buffer_len,
                                          uint8_t* pun_rx_buffer,
                                          uint8_t  un_rx_buffer_len) {
-   if(m_eStatus != EStatus::BUSY) {
-      m_eStatus = EStatus::BUSY;
+   if(m_eStatusOld != EStatusOld::BUSY) {
+      m_eStatusOld = EStatusOld::BUSY;
       m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INDATAEXCHANGE);
       m_punIOBuffer[1] = 0x01; // logical number of the relevant target
 
@@ -256,7 +289,7 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
       memcpy(m_punIOBuffer + 2, pun_tx_buffer, un_tx_buffer_len);
 
       if(!write_cmd_check_ack(m_punIOBuffer, un_tx_buffer_len + 2)){
-         m_eStatus = EStatus::FAILED;         
+         m_eStatusOld = EStatusOld::FAILED;         
          return 0;
       }
    }
@@ -266,25 +299,25 @@ uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
    if(bReady) {
       /* check response validity */
       if(m_punIOBuffer[5] != PN532_PN532TOHOST){
-         m_eStatus = EStatus::FAILED;
+         m_eStatusOld = EStatusOld::FAILED;
          return 0;
       }
       if(m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::INDATAEXCHANGE)){
-         m_eStatus = EStatus::FAILED;
+         m_eStatusOld = EStatusOld::FAILED;
          return 0;
       }
       if(m_punIOBuffer[NFC_FRAME_ID_INDEX + 1]) {
-         m_eStatus = EStatus::FAILED;
+         m_eStatusOld = EStatusOld::FAILED;
          return 0;
       }
       /* return number of read bytes */
       uint8_t unRxDataLength = m_punIOBuffer[3] - 3;
       memcpy(pun_rx_buffer, m_punIOBuffer + 8, (unRxDataLength > un_rx_buffer_len) ? un_rx_buffer_len : unRxDataLength);
-      m_eStatus = EStatus::READY;      
+      m_eStatusOld = EStatusOld::READY;      
       return (unRxDataLength > un_rx_buffer_len) ? un_rx_buffer_len : unRxDataLength;
    }
    else {
-      m_eStatus = EStatus::BUSY;
+      m_eStatusOld = EStatusOld::BUSY;
       return 0;
    }
 }
@@ -491,28 +524,18 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 */
 /*****************************************************************************/
 
+// TODO un_length -> available size of buffer, base actual read length on frame info
+
 bool CNFCController::Read(uint8_t* pun_buffer, uint8_t un_length, uint8_t un_tries) {
-   /* attempt to read response x times */
-   for(uint8_t un_attempt = 0; un_attempt < un_tries; un_attempt++) {
-      if(un_tries != 1) Firmware::GetInstance().GetTimer().Delay(10);
-      // Start read (n+1 to take into account leading 0x01 with I2C)
-      CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::RECEIVE);
-      if(CTWController::GetInstance().Receive() == PN532_I2C_READY) {
-         /* read response */
-         for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
-            pun_buffer[un_index] = CTWController::GetInstance().Receive();
-         pun_buffer[un_length - 1] = CTWController::GetInstance().Receive(false);
-         CTWController::GetInstance().Stop();
-         return true;
-      }
-      else {
-         /* flush */
-         for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
-            CTWController::GetInstance().Receive();
-         CTWController::GetInstance().Receive(false);
-         CTWController::GetInstance().Stop();
-         continue;
-      }
+   // Start read (n+1 to take into account leading 0x01 with I2C)
+   CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::RECEIVE);
+   if(CTWController::GetInstance().Receive() == PN532_I2C_READY) {
+      /* read response */
+      for(uint8_t un_index = 0; un_index < (un_length - 1); un_index++)
+         pun_buffer[un_index] = CTWController::GetInstance().Receive();
+      pun_buffer[un_length - 1] = CTWController::GetInstance().Receive(false);
+      CTWController::GetInstance().Stop();
+      return true;
    }
    return false;
 }

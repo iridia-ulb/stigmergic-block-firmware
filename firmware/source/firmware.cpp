@@ -198,24 +198,6 @@ bool Firmware::InitXbee() {
 /***********************************************************/
 /***********************************************************/
 
-bool Firmware::InitPN532() {
-   bool bNFCInitSuccess = false;
-   if(m_cNFCController.Probe() == true) {
-      //fprintf(m_psOutputUART, "Probe: SUCCESS\r\n");
-      if(m_cNFCController.ConfigureSAM() == true) {
-         //fprintf(m_psOutputUART, "SAM: SUCCESS\r\n");
-         if(m_cNFCController.PowerDown() == true) {
-            //fprintf(m_psOutputUART, "PWDN: SUCCESS\r\n");
-            bNFCInitSuccess = true;
-         }
-      }    
-   }
-   return bNFCInitSuccess;
-}
-
-/***********************************************************/
-/***********************************************************/
-
 bool Firmware::InitMPU6050() {
    /* probe */
    if(CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::WHOAMI) == MPU6050_ADDR) {
@@ -249,7 +231,7 @@ void Firmware::TestAccelerometer() {
 
 void Firmware::TestPMIC() {
    fprintf(m_psOutputUART,
-           "Power Connected = %c\r\nCharging = %c\r\n",
+           "Powered = %c\r\nCharging = %c\r\n",
            (PIND & PWR_MON_PGOOD)?'F':'T',
            (PIND & PWR_MON_CHG)?'F':'T');
 }
@@ -299,17 +281,17 @@ void Firmware::TestLEDs() {
 /***********************************************************/
 /***********************************************************/
 
-CNFCController::EStatus Firmware::TestNFCTx() {
+CNFCController::EStatusOld Firmware::TestNFCTx() {
    uint8_t punOutboundBuffer[] = {'2'};
    uint8_t punInboundBuffer[20];
    uint8_t unRxCount = 0;
 
-   if(m_cNFCController.GetStatus() != CNFCController::EStatus::BUSY) {
+   if(m_cNFCController.GetStatusOld() != CNFCController::EStatusOld::BUSY) {
       if(!m_cNFCController.P2PInitiatorInit()) {
          m_cNFCController.PowerDown();
          m_cTimer.Delay(100);
-         m_cPortController.ClearInterrupts();
-         return CNFCController::EStatus::FAILED;
+         //m_cPortController.ClearInterrupts();
+         return CNFCController::EStatusOld::FAILED;
       }
    }
    unRxCount =
@@ -318,12 +300,12 @@ CNFCController::EStatus Firmware::TestNFCTx() {
                                         punInboundBuffer,
                                         20);
 
-   CNFCController::EStatus eStatus = m_cNFCController.GetStatus();
+   CNFCController::EStatusOld eStatus = m_cNFCController.GetStatusOld();
 
-   if(eStatus != CNFCController::EStatus::BUSY) {
+   if(eStatus != CNFCController::EStatusOld::BUSY) {
       m_cNFCController.PowerDown();
       m_cTimer.Delay(100);
-      m_cPortController.ClearInterrupts();
+      //m_cPortController.ClearInterrupts();
    }
    return eStatus;
 }
@@ -366,7 +348,7 @@ bool Firmware::TestNFCRx() {
    m_cNFCController.PowerDown();
    // Once an response for a command is ready, an interrupt is generated. The last interrupt for the power down reply is cleared here
    m_cTimer.Delay(100);
-   m_cPortController.ClearInterrupts();
+   //m_cPortController.ClearInterrupts();
    // An unRxCount of greater than zero normally indicates success
    return (unRxCount > 0);
 }
@@ -429,35 +411,10 @@ int Firmware::Exec() {
                  m_cTimer.GetMilliseconds(),
                  GetPortString(eConnectedPort));
          CLEDController::Init();
-         CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::BLINK);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x00,0x00);
-         fprintf(m_psOutputUART, "[%05lu] Init PN532 on %s\r\n", 
-                 m_cTimer.GetMilliseconds(), 
-                 GetPortString(eConnectedPort));
-         m_cPortController.EnablePort(eConnectedPort);
-         for(uint8_t unAttempts = 3; unAttempts > 0; unAttempts--) {
-            if(InitPN532() == true) {
-               CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
-               break;
-            }
-            m_cTimer.Delay(100);
-         }
+         CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
+         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
       }
    }
-
-   /* Do Xbee detection */
-   bHasXbee = false;
-   /*
-   if((bHasXbee = InitXbee()) == true) {
-      fprintf(m_psOutputUART, "[%05lu] Xbee IO Selected!\r\n", m_cTimer.GetMilliseconds());
-      m_psOutputUART = m_psTUART;
-      for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-         m_cPortController.SelectPort(eConnectedPort);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x05);
-      }
-   }
-   */
 
    InteractiveMode();
 
@@ -470,7 +427,7 @@ int Firmware::Exec() {
 void Firmware::InteractiveMode() {
    uint8_t unInput = 0;
 
-   CPortController::EPort eTxPort = m_peConnectedPorts[0];
+   //CPortController::EPort eTxPort = m_peConnectedPorts[0];
 
    for(;;) {
       if(bHasXbee) {
@@ -551,65 +508,50 @@ void Firmware::InteractiveMode() {
          break;
       case 't':
          m_cPortController.SelectPort(CPortController::EPort::TOP);
-         while(TestNFCTx() != CNFCController::EStatus::READY) {
-            m_cPortController.SelectPort(CPortController::EPort::BOTTOM);
-            fprintf(m_psOutputUART, ".");
-            m_cPortController.SelectPort(CPortController::EPort::TOP);
-         }
+         m_cNFCController.Probe();
          break;
       case 'p':
-         TestPMIC();
+         switch(m_cNFCController.GetStatus()) {
+            case CNFCController::EStatus::READY:
+               fprintf(m_psOutputUART, "R\r\n");
+               break;
+            case CNFCController::EStatus::WAIT_ACK:
+               fprintf(m_psOutputUART, "WA\r\n");
+               break;
+            case CNFCController::EStatus::WAIT_RESP:
+               fprintf(m_psOutputUART, "WR\r\n");
+               break;
+            case CNFCController::EStatus::FAILED:
+               fprintf(m_psOutputUART, "F\r\n");
+               break;
+         }
          break;
       case 'u':
          fprintf(m_psOutputUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
          break;
       default:
-         m_cPortController.SynchronizeInterrupts();
-         if(m_cPortController.HasInterrupts()) {
-            uint8_t unIRQs = m_cPortController.GetInterrupts();
-            fprintf(m_psOutputUART, "irq(0x%02X)\r\n", unIRQs);
+         uint8_t unIRQs = m_cPortController.GetInterrupts();
+         if(unIRQs != 0x00) {
+            fprintf(m_psOutputUART, "IRQ: 0x%02X\r\n", unIRQs);
             for(CPortController::EPort eRxPort : m_peConnectedPorts) {
                if(eRxPort != CPortController::EPort::NULLPORT) {
                   if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
                      m_cPortController.SelectPort(eRxPort);
-                     uint8_t punOutboundBuffer[] = {'S','B','0','1'};
-                     uint8_t punInboundBuffer[8];
-                     uint8_t unRxCount = 0;
-
-                     if(m_cNFCController.P2PTargetInit()) {
-                        unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer, 4, punInboundBuffer, 8);
-                     }
-                     m_cTimer.Delay(60);
-                     m_cNFCController.PowerDown();
-                     m_cTimer.Delay(100);
-                     m_cPortController.ClearInterrupts();
-
-                     for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-                        if(eConnectedPort != CPortController::EPort::NULLPORT) {
-                           m_cPortController.SelectPort(eConnectedPort);
-                           CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-                           switch(punInboundBuffer[0]) {
-                           case '1':
-                              // Q1 (U+, V+)
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
-                              break;
-                           case '2':
-                              // Q2 (U-, V+)
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
-                              break;
-                           case '3':
-                              // Q3 (U-, V-)
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
-                              break;
-                           case '4':
-                              // Q4 (U+, V-)
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
-                              break;
-                           default:
-                              CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
-                              break;
-                           }
-                        }
+                     switch(m_cNFCController.GetStatus()) {
+                        case CNFCController::EStatus::READY:
+                           fprintf(m_psOutputUART, "R\r\n");
+                           break;
+                        case CNFCController::EStatus::WAIT_ACK:
+                           fprintf(m_psOutputUART, "WA\r\n");
+                           m_cNFCController.Probe();
+                           break;
+                        case CNFCController::EStatus::WAIT_RESP:
+                           fprintf(m_psOutputUART, "WR\r\n");
+                           m_cNFCController.Probe();
+                           break;
+                        case CNFCController::EStatus::FAILED:
+                           fprintf(m_psOutputUART, "F\r\n");
+                           break;
                      }
                   }
                }

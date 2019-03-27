@@ -68,17 +68,6 @@ public:
       return m_cTUARTController;
    }
 
-   /*
-   CHUARTController& GetHUARTController() {
-      return m_cHUARTController;
-   }
-   */
-   /*
-   HardwareSerial& GetHUARTController() {
-      return m_cHUARTController;
-   }
-   */
-
    CTimer& GetTimer() {
       return m_cTimer;
    }
@@ -105,7 +94,7 @@ private:
    void TestAccelerometer();
    void TestPMIC();
    void TestLEDs();
-   CNFCController::EStatus TestNFCTx();
+   CNFCController::EStatusOld TestNFCTx();
    bool TestNFCRx();
 
    struct CBlockLEDRoutines {
@@ -166,10 +155,7 @@ private:
 
 
    /* ATMega328P Controllers */
-   /* TODO remove singleton and reference from HUART */
-   //CHUARTController& m_cHUARTController;
-   //HardwareSerial& m_cHUARTController;
-   
+  
    CTUARTController m_cTUARTController;
 
    CNFCController m_cNFCController;

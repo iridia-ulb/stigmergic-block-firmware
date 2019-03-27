@@ -7,32 +7,16 @@
 #define NUM_FACES 6
 #define PORTC_TWCLK_MASK 0x20
 
-CPortController::CPortInterrupt::CPortInterrupt(CPortController* pc_port_controller, uint8_t un_intr_vect_num) :
-   m_pcPortController(pc_port_controller) {
-   Register(this, un_intr_vect_num);
-}
-
 /***********************************************************/
 /***********************************************************/
 
-void CPortController::CPortInterrupt::ServiceRoutine() {
-   m_pcPortController->bSynchronizeRequired = true;
-}
-
-/***********************************************************/
-/***********************************************************/
-
-CPortController::CPortController() :
-   m_unInterrupts(0x00),
-   m_unLastRegisterState(0xFF),
-   bSynchronizeRequired(true),
-   m_cPortInterrupt(this, 1) { 
+CPortController::CPortController() { 
 
    /* Configure the port TW multiplexer */
    DDRC |= PORT_CTRL_MASK;
 
    /* Disable all ports initially */
-   /* Safe state, since selected a non-connected face results in stalling the tw bus on R/W */
+   /* Safe state, since selected a non-connected face results in stalling the I2C bus on R/W */
    SelectPort(EPort::NULLPORT);
 }
 
@@ -40,47 +24,14 @@ CPortController::CPortController() :
 void CPortController::Init() {
    /* Configure the reset lines to the faces as outputs (driven high by default) */
    CTWController::GetInstance().Write(PCA9554_RST_ADDR, EPCA9554Register::CONFIG, 0xC0);
-   /* Enable external interrupt */
-   EICRA &= ~EXT_INT0_SENSE_MASK;
-   EICRA |= EXT_INT0_FALLING_EDGE;
-   EIMSK |= EXT_INT0_ENABLE;
-}
-
-/***********************************************************/
-/***********************************************************/
-
-void CPortController::SynchronizeInterrupts() {
-   if(bSynchronizeRequired) {
-      /* clear flag */
-      bSynchronizeRequired = false;
-      /* read port */
-      uint8_t unRegisterState = CTWController::GetInstance().Read(PCA9554_IRQ_ADDR, EPCA9554Register::INPUT);
-      /* append detected falling edges to the interrupt vector */
-      m_unInterrupts |= (unRegisterState ^ m_unLastRegisterState) & (~unRegisterState);
-      /* store the synchronized state for the next sync */
-      m_unLastRegisterState = unRegisterState;
-   }
-}
-
-/***********************************************************/
-/***********************************************************/
-
-void CPortController::ClearInterrupts(uint8_t un_clear_mask) {
-   m_unInterrupts &= (~un_clear_mask);
-}
-
-/***********************************************************/
-/***********************************************************/
-
-bool CPortController::HasInterrupts() {
-   return (m_unInterrupts != 0x00);
 }
 
 /***********************************************************/
 /***********************************************************/
 
 uint8_t CPortController::GetInterrupts() {
-   return m_unInterrupts;
+   uint8_t unInputBuffer = CTWController::GetInstance().Read(PCA9554_IRQ_ADDR, EPCA9554Register::INPUT);
+   return ~unInputBuffer;
 }
 
 /***********************************************************/

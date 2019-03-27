@@ -26,7 +26,7 @@ enum class ESAMMode : uint8_t {
 
 #define NFC_FRAME_DIRECTION_INDEX           5
 #define NFC_FRAME_ID_INDEX                  6
-#define NFC_FRAME_STATUS_INDEX              7
+#define NFC_FRAME_DATA_INDEX                7
 
 #define PN532_HOSTTOPN532                   (0xD4)
 #define PN532_PN532TOHOST                   (0xD5)
@@ -35,12 +35,18 @@ class CNFCController {
 
 public:
 
-   enum class EStatus {
+   enum class EStatusOld {
       READY,
       BUSY,
       FAILED,
    };
 
+   enum class EStatus {
+      READY,
+      WAIT_ACK,
+      WAIT_RESP,
+      FAILED,
+   };
 
    enum class ECommand : uint8_t {
       DIAGNOSE              = 0x00,
@@ -80,7 +86,9 @@ public:
 
    CNFCController() {}
 
-   bool Probe();
+   
+
+   void Probe();
 
    bool ConfigureSAM(ESAMMode e_mode = ESAMMode::NORMAL, uint8_t un_timeout = 20, bool b_use_irq = false);
 
@@ -100,24 +108,36 @@ public:
 
    bool PowerDown();
 
+   EStatusOld GetStatusOld() const {
+      return m_eStatusOld;
+   }
+
    EStatus GetStatus() const {
       return m_eStatus;
    }
+
+   static bool FrameIsResponseTo(ECommand e_command);
+
 
 private:
 
    void write_cmd(uint8_t *cmd, uint8_t len);
    uint8_t write_cmd_check_ack(uint8_t *cmd, uint8_t len);
-   bool Read(uint8_t *buf, uint8_t len, uint8_t tries = 25);
+   bool Read(uint8_t *buf, uint8_t len, uint8_t tries = 1);
    bool read_ack(void);
 
    void puthex(uint8_t data);
    void puthex(uint8_t *buf, uint32_t len);
 
-   /* data buffer for reading / writing commands */
-   uint8_t m_punIOBuffer[NFC_CMD_BUF_LEN];
+   EStatusOld m_eStatusOld = EStatusOld::READY;
 
    EStatus m_eStatus = EStatus::READY;
+
+   /* shared data buffer for reading / writing commands */
+   static uint8_t m_punIOBuffer[NFC_CMD_BUF_LEN];
+
+   const static uint8_t m_punFirmwareVersion[4];
+
 
 };
 

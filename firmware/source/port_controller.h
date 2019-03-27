@@ -30,10 +30,6 @@ public:
 
    void Init();
    
-   /* detects interrupts at the port interrupt register */
-   void SynchronizeInterrupts();
-   void ClearInterrupts(uint8_t un_clear_mask = 0xFF);
-   bool HasInterrupts();
    uint8_t GetInterrupts();
 
    void EnablePort(EPort e_enable);
@@ -50,19 +46,6 @@ private:
       CONFIG         = 0x03  // R/W
    };
 
-   uint8_t m_unInterrupts;
-   uint8_t m_unLastRegisterState;
-   bool bSynchronizeRequired; 
-
-   class CPortInterrupt : public CInterrupt {
-   private:
-      CPortController* m_pcPortController;
-      void ServiceRoutine();
-   public:
-      CPortInterrupt(CPortController* pc_port_controller, uint8_t un_intr_vect_num);
-   } m_cPortInterrupt;
-
-   friend CPortInterrupt;
 
 };
 
