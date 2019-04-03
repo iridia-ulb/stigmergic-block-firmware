@@ -276,83 +276,6 @@ void Firmware::TestLEDs() {
    }
 }
 
-#define NFC_DEBUG
-
-/***********************************************************/
-/***********************************************************/
-
-CNFCController::EStatusOld Firmware::TestNFCTx() {
-   uint8_t punOutboundBuffer[] = {'2'};
-   uint8_t punInboundBuffer[20];
-   uint8_t unRxCount = 0;
-
-   if(m_cNFCController.GetStatusOld() != CNFCController::EStatusOld::BUSY) {
-      if(!m_cNFCController.P2PInitiatorInit()) {
-         m_cNFCController.PowerDown();
-         m_cTimer.Delay(100);
-         //m_cPortController.ClearInterrupts();
-         return CNFCController::EStatusOld::FAILED;
-      }
-   }
-   unRxCount =
-      m_cNFCController.P2PInitiatorTxRx(punOutboundBuffer,
-                                        1,
-                                        punInboundBuffer,
-                                        20);
-
-   CNFCController::EStatusOld eStatus = m_cNFCController.GetStatusOld();
-
-   if(eStatus != CNFCController::EStatusOld::BUSY) {
-      m_cNFCController.PowerDown();
-      m_cTimer.Delay(100);
-      //m_cPortController.ClearInterrupts();
-   }
-   return eStatus;
-}
-
-/***********************************************************/
-/***********************************************************/
-
-bool Firmware::TestNFCRx() {
-   uint8_t punOutboundBuffer[] = {'S','M','A','R','T','B','L','K','0','2'};
-   uint8_t punInboundBuffer[20];
-   uint8_t unRxCount = 0;
-
-#ifdef NFC_DEBUG
-   fprintf(m_psOutputUART, "Testing NFC RX\r\n");
-#endif
-   //m_cPortController.SelectPort(CPortController::EPort::EAST);
-   if(m_cNFCController.P2PTargetInit()) {
-#ifdef NFC_DEBUG
-      fprintf(m_psOutputUART, "Connected!\r\n");
-#endif
-      unRxCount = m_cNFCController.P2PTargetTxRx(punOutboundBuffer,
-                                                 10,
-                                                 punInboundBuffer,
-                                                 20);
-#ifdef NFC_DEBUG
-      if(unRxCount > 0) {
-         fprintf(m_psOutputUART, "Received %i bytes: ", unRxCount);
-         for(uint8_t i = 0; i < unRxCount; i++) {
-            fprintf(m_psOutputUART, "%c", punInboundBuffer[i]);
-         }
-         fprintf(m_psOutputUART, "\r\n");
-      }
-      else {
-         fprintf(m_psOutputUART, "No data\r\n");
-      }
-#endif
-   }
-   // This delay is important - entering power down too soon causes issues with future communication
-   m_cTimer.Delay(60);
-   m_cNFCController.PowerDown();
-   // Once an response for a command is ready, an interrupt is generated. The last interrupt for the power down reply is cleared here
-   m_cTimer.Delay(100);
-   //m_cPortController.ClearInterrupts();
-   // An unRxCount of greater than zero normally indicates success
-   return (unRxCount > 0);
-}
-
 /***********************************************************/
 /***********************************************************/
 
@@ -425,9 +348,9 @@ int Firmware::Exec() {
 /***********************************************************/
 
 void Firmware::InteractiveMode() {
-   uint8_t unInput = 0;
+   CNFCController cNFCController;
 
-   //CPortController::EPort eTxPort = m_peConnectedPorts[0];
+   uint8_t unInput = 0;
 
    for(;;) {
       if(bHasXbee) {
@@ -500,31 +423,18 @@ void Firmware::InteractiveMode() {
             }
          }
          break;
-      case 'l':
-         TestLEDs();
+      case 'i':
+         fprintf(m_psOutputUART, "IRQ: 0x%02X\r\n", m_cPortController.GetInterrupts());
          break;
       case 'r':
          Reset();
          break;
-      case 't':
-         m_cPortController.SelectPort(CPortController::EPort::TOP);
-         m_cNFCController.Probe();
+      case 's':
+         fprintf(m_psOutputUART, "STT: 0x%02X\r\n", static_cast<uint8_t>(cNFCController.m_eState));
+         fprintf(m_psOutputUART, "CMD: 0x%02X\r\n", static_cast<uint8_t>(cNFCController.m_eSelectedCommand));
          break;
-      case 'p':
-         switch(m_cNFCController.GetStatus()) {
-            case CNFCController::EStatus::READY:
-               fprintf(m_psOutputUART, "R\r\n");
-               break;
-            case CNFCController::EStatus::WAIT_ACK:
-               fprintf(m_psOutputUART, "WA\r\n");
-               break;
-            case CNFCController::EStatus::WAIT_RESP:
-               fprintf(m_psOutputUART, "WR\r\n");
-               break;
-            case CNFCController::EStatus::FAILED:
-               fprintf(m_psOutputUART, "F\r\n");
-               break;
-         }
+      case 't':
+         cNFCController.AppendEvent(CNFCController::EEvent::Transceive);
          break;
       case 'u':
          fprintf(m_psOutputUART, "Uptime = %lums\r\n", m_cTimer.GetMilliseconds());
@@ -532,27 +442,55 @@ void Firmware::InteractiveMode() {
       default:
          uint8_t unIRQs = m_cPortController.GetInterrupts();
          if(unIRQs != 0x00) {
-            fprintf(m_psOutputUART, "IRQ: 0x%02X\r\n", unIRQs);
+            switch(cNFCController.m_eState) {
+            case CNFCController::EState::Standby:
+               fprintf(m_psOutputUART, "S:");
+               break;
+            case CNFCController::EState::Ready:
+               fprintf(m_psOutputUART, "R:");
+               break;
+            case CNFCController::EState::WaitingForAck:
+               fprintf(m_psOutputUART, "WA:");
+               break;
+            case CNFCController::EState::WaitingForResp:
+               fprintf(m_psOutputUART, "WR:");
+               break;
+            case CNFCController::EState::Failed:
+               fprintf(m_psOutputUART, "F:");
+               break;
+            }
+            switch(cNFCController.m_eSelectedCommand) {
+            case CNFCController::ECommand::GetFirmwareVersion:
+               fprintf(m_psOutputUART, "GFV:");
+               break;
+            case CNFCController::ECommand::ConfigureSAM:
+               fprintf(m_psOutputUART, "CSAM:");
+               break;
+            case CNFCController::ECommand::InJumpForDEP:
+               fprintf(m_psOutputUART, "IJFD:");
+               break;
+            case CNFCController::ECommand::InDataExchange:
+               fprintf(m_psOutputUART, "IDE:");
+               break;
+            case CNFCController::ECommand::TgInitAsTarget:
+               fprintf(m_psOutputUART, "IAT:");
+               break;
+            case CNFCController::ECommand::TgGetData:
+               fprintf(m_psOutputUART, "TGD:");
+               break;
+            case CNFCController::ECommand::TgSetData:
+               fprintf(m_psOutputUART, "TSD:");
+               break;
+            default:
+               fprintf(m_psOutputUART, "0x%02x", static_cast<uint8_t>(cNFCController.m_eSelectedCommand));
+               break;
+            }
+            fprintf(m_psOutputUART, "\r\n");
             for(CPortController::EPort eRxPort : m_peConnectedPorts) {
                if(eRxPort != CPortController::EPort::NULLPORT) {
                   if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
                      m_cPortController.SelectPort(eRxPort);
-                     switch(m_cNFCController.GetStatus()) {
-                        case CNFCController::EStatus::READY:
-                           fprintf(m_psOutputUART, "R\r\n");
-                           break;
-                        case CNFCController::EStatus::WAIT_ACK:
-                           fprintf(m_psOutputUART, "WA\r\n");
-                           m_cNFCController.Probe();
-                           break;
-                        case CNFCController::EStatus::WAIT_RESP:
-                           fprintf(m_psOutputUART, "WR\r\n");
-                           m_cNFCController.Probe();
-                           break;
-                        case CNFCController::EStatus::FAILED:
-                           fprintf(m_psOutputUART, "F\r\n");
-                           break;
-                     }
+                     cNFCController.AppendEvent(CNFCController::EEvent::Interrupt);
                   }
                }
             }

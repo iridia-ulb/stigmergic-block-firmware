@@ -82,7 +82,6 @@ private:
    bool InitMPU6050();
 
    bool InitPCA9635();
-   bool InitPN532();
 
    void DetectPorts();
    const char* GetPortString(CPortController::EPort ePort);
@@ -94,8 +93,6 @@ private:
    void TestAccelerometer();
    void TestPMIC();
    void TestLEDs();
-   CNFCController::EStatusOld TestNFCTx();
-   bool TestNFCRx();
 
    struct CBlockLEDRoutines {
       static void SetAllColorsOnFace(uint8_t unRed, uint8_t unGreen, uint8_t unBlue);
@@ -152,13 +149,10 @@ private:
       CPortController::EPort::NULLPORT,
    };
 
-
-
+   
    /* ATMega328P Controllers */
   
    CTUARTController m_cTUARTController;
-
-   CNFCController m_cNFCController;
 
    CADCController m_cADCController;
 
