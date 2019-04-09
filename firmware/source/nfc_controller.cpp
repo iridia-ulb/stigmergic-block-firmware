@@ -51,45 +51,13 @@ const uint8_t CNFCController::m_punInJumpForDEPArguments[] = {
 /***********************************************************/
 /***********************************************************/
 
-uint8_t CNFCController::STxFunctor::operator()(uint8_t* pun_data, uint8_t un_length) {
-//   return 0;
-   pun_data[0] = 'h';
-   pun_data[1] = 'e';
-   pun_data[2] = 'l';
-   pun_data[3] = 'l';
-   pun_data[4] = 'o';
-   return 5;
-};
-
-/***********************************************************/
-/***********************************************************/
-
-void CNFCController::SRxFunctor::operator()(const uint8_t* pun_data, uint8_t un_length) {
-   for(uint8_t i = 0; i < un_length; i++)
-      fprintf(CFirmware::GetInstance().m_psHUART, "%c", static_cast<char>(pun_data[i]));
-   fprintf(CFirmware::GetInstance().m_psHUART, "\r\n");
-   return;
-};
-
-/***********************************************************/
-/***********************************************************/
-
-CNFCController::CNFCController(STxFunctor& s_target_tx_functor,
-                               SRxFunctor& s_target_rx_functor,
-                               STxFunctor& s_initiator_tx_functor,
-                               SRxFunctor& s_initiator_rx_functor) :
-   m_sTargetTxFunctor(s_target_tx_functor),
-   m_sTargetRxFunctor(s_target_rx_functor),
-   m_sInitiatorTxFunctor(s_initiator_tx_functor),
-   m_sInitiatorRxFunctor(s_initiator_rx_functor),
+CNFCController::CNFCController() :
+   m_psTargetTxFunctor(nullptr),
+   m_psTargetRxFunctor(nullptr),
+   m_psInitiatorTxFunctor(nullptr),
+   m_psInitiatorRxFunctor(nullptr),
    m_eSelectedCommand(ECommand::GetFirmwareVersion),
-   m_eState(EState::Standby) {  
-   /* Assumptions: 
-      1. I2C is ready and available
-      2. the correct face is selected 
-   */
-   Write(ECommand::GetFirmwareVersion, nullptr, 0);
-}
+   m_eState(EState::Standby) {}
 
 /***********************************************************/
 /***********************************************************/
@@ -110,6 +78,7 @@ bool CNFCController::AppendEvent(EEvent e_event) {
 bool CNFCController::ProcessEvent(EEvent e_event) {
    switch(m_eState) {
    case EState::Standby:
+      Write(ECommand::GetFirmwareVersion, nullptr, 0);
       break;
    case EState::Ready:
       break;
@@ -123,7 +92,8 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
             m_eState = EState::Failed;
          }
       }
-      break;   case EState::WaitingForResp:
+      break;
+   case EState::WaitingForResp:
       if(e_event == EEvent::Interrupt && ReadResp()) {
          switch(m_eSelectedCommand) {
          case ECommand::GetFirmwareVersion:
@@ -139,8 +109,11 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
             break;
          case ECommand::TgGetData:
             if(m_punTxRxBuffer[0] == 0) {
-               m_sTargetRxFunctor(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
-               Write(ECommand::TgSetData, m_punTxRxBuffer, m_sTargetTxFunctor(m_punTxRxBuffer, sizeof m_punTxRxBuffer));
+               if(m_psTargetRxFunctor) {
+                  (*m_psTargetRxFunctor)(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
+               }
+               Write(ECommand::TgSetData, m_punTxRxBuffer, 
+                     m_psTargetTxFunctor ? (*m_psTargetTxFunctor)(m_punTxRxBuffer, sizeof m_punTxRxBuffer) : 0);
             }
             else {
                fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "TGD:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
@@ -163,7 +136,7 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                /* set the logical number of the target */
                m_punTxRxBuffer[0] = 1u;
                Write(ECommand::InDataExchange, m_punTxRxBuffer, 
-                     m_sInitiatorTxFunctor(m_punTxRxBuffer + 1, (sizeof m_punTxRxBuffer) - 1));
+                     m_psInitiatorTxFunctor ? (*m_psInitiatorTxFunctor)(m_punTxRxBuffer + 1, (sizeof m_punTxRxBuffer) - 1) : 0);
             }
             else {
                fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "DEP:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
@@ -173,7 +146,9 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
             break;
          case ECommand::InDataExchange:
             if(m_punTxRxBuffer[0] == 0) {
-               m_sInitiatorRxFunctor(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
+               if(m_psInitiatorRxFunctor) {
+                  (*m_psInitiatorRxFunctor)(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
+               }
                /* return to target mode */
                Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }

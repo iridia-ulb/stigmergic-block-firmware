@@ -24,24 +24,6 @@
 
 #define NUM_PORTS 6
 
-/* I2C Address Space */
-#define MPU6050_ADDR               0x68
-
-enum class EMPU6050Register : uint8_t {
-   /* MPU6050 Registers */
-   PWR_MGMT_1     = 0x6B, // R/W
-   PWR_MGMT_2     = 0x6C, // R/W
-   ACCEL_XOUT_H   = 0x3B, // R  
-   ACCEL_XOUT_L   = 0x3C, // R  
-   ACCEL_YOUT_H   = 0x3D, // R  
-   ACCEL_YOUT_L   = 0x3E, // R  
-   ACCEL_ZOUT_H   = 0x3F, // R  
-   ACCEL_ZOUT_L   = 0x40, // R  
-   TEMP_OUT_H     = 0x41, // R  
-   TEMP_OUT_L     = 0x42, // R  
-   WHOAMI         = 0x75  // R
-};
-
 #define PWR_MON_MASK   0xC0
 #define PWR_MON_PGOOD  0x40
 #define PWR_MON_CHG    0x80
@@ -65,13 +47,12 @@ public:
       m_psOutputUART = ps_huart;
    }
 
-   CTUARTController& GetTUARTController() {
-      return m_cTUARTController;
-   }
-
    int Exec();
       
 private:
+
+   /* private constructor */
+   CFirmware() = default;
 
    bool bHasXbee;
 
@@ -83,67 +64,50 @@ private:
    void DetectPorts();
    const char* GetPortString(CPortController::EPort ePort);
 
-   //void HardwareTestMode();
    void InteractiveMode();
 
    /* Test Routines */
    void TestAccelerometer();
    void TestPMIC();
-   void TestLEDs();
-
-   struct CBlockLEDRoutines {
-      static void SetAllColorsOnFace(uint8_t unRed, uint8_t unGreen, uint8_t unBlue);
-      static void SetAllModesOnFace(CLEDController::EMode eMode);
-   };
 
    /* Reset */
    void Reset();
 
-   /* private constructor */
-   CFirmware() :
-      m_cPortController(),
-      m_cTUARTController(9600,
-                         TCCR1A,
-                         TCCR1B,
-                         TIMSK1,
-                         TIFR1,
-                         ICR1,
-                         OCR1A,
-                         OCR1B,
-                         TCNT1,
-                         TIMER1_CAPT_vect_num,
-                         TIMER1_COMPA_vect_num,
-                         TIMER1_COMPB_vect_num) {}
-
-   CPortController m_cPortController;
-
-   CPortController::EPort m_peAllPorts[NUM_PORTS] {
-      CPortController::EPort::NORTH,
-      CPortController::EPort::EAST,
-      CPortController::EPort::SOUTH,
-      CPortController::EPort::WEST,
-      CPortController::EPort::TOP,
-      CPortController::EPort::BOTTOM,
+   struct SRxDetector : CNFCController::SRxFunctor {     
+      virtual void operator()(const uint8_t* pun_data, uint8_t un_length) {
+         LastRxTime = CClock::GetInstance().GetMilliseconds();
+      }
+      uint32_t LastRxTime;
    };
 
-   CPortController::EPort m_peConnectedPorts[NUM_PORTS] {
-      CPortController::EPort::NULLPORT,
-      CPortController::EPort::NULLPORT,
-      CPortController::EPort::NULLPORT,
-      CPortController::EPort::NULLPORT,
-      CPortController::EPort::NULLPORT,
-      CPortController::EPort::NULLPORT,
+   struct SFace {
+      CPortController::EPort Port;
+      bool Connected;
+      SRxDetector RxDetector;
+      CNFCController NFC;
    };
 
-   
-   /* ATMega328P Controllers */
-  
-   CTUARTController m_cTUARTController;
+   SFace m_psFaces[6] {
+      { CPortController::EPort::NORTH },
+      { CPortController::EPort::EAST },
+      { CPortController::EPort::SOUTH },
+      { CPortController::EPort::WEST },
+      { CPortController::EPort::TOP },
+      { CPortController::EPort::BOTTOM },
+   };
 
-   CADCController m_cADCController;
+   void Debug(const SFace& s_face);
 
-public: // TODO, don't make these public
-    /* File structs for fprintf */
+   template<typename T>
+   T GetRandomNumber(int32_t n_min, int32_t n_max) {
+      static int32_t nValue = 
+         CADCController::GetInstance().Read(CADCController::EChannel::TEMP);
+      nValue = (nValue * 109 + 89);
+      return static_cast<T>(((nValue < 0 ? -nValue : nValue) % (n_max - n_min)) + n_min);
+   } 
+
+public: 
+   /* TODO remove fprintf, stdio etc, replace with operator<< */
    FILE* m_psTUART;
    FILE* m_psHUART;
    FILE* m_psOutputUART;

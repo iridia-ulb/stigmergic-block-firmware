@@ -29,24 +29,24 @@ class CNFCController {
 
 public:
 
+   /* forward declarations */
    enum class ECommand : uint8_t;
    enum class EEvent;
    enum class EState;
 
+   /* interface for tx and rx functors */
    struct STxFunctor {
-      virtual uint8_t operator()(uint8_t* pun_data, uint8_t un_length);
+      virtual uint8_t operator()(uint8_t* pun_data, uint8_t un_length) = 0;
    };
 
    struct SRxFunctor {
-      virtual void operator()(const uint8_t* pun_data, uint8_t un_length);
+      virtual void operator()(const uint8_t* pun_data, uint8_t un_length) = 0;
    };
 
 public:
-
-   CNFCController(STxFunctor& s_target_tx_functor,
-                  SRxFunctor& s_target_rx_functor,
-                  STxFunctor& s_initiator_tx_functor,
-                  SRxFunctor& s_initiator_rx_functor);
+   
+   /* constructor */
+   CNFCController();
 
    bool AppendEvent(EEvent e_event);
 
@@ -57,11 +57,50 @@ public:
       return m_eState;
    }
 
+   void SetInitiatorTxFunctor(STxFunctor* ps_tx_functor) {
+      m_psInitiatorTxFunctor = ps_tx_functor;
+   }
+
+   void SetInitiatorRxFunctor(SRxFunctor* ps_rx_functor) {
+      m_psInitiatorRxFunctor = ps_rx_functor;
+   }
+
+   void SetTargetTxFunctor(STxFunctor* ps_tx_functor) {
+      m_psTargetTxFunctor = ps_tx_functor;
+   }
+
+   void SetTargetRxFunctor(SRxFunctor* ps_rx_functor) {
+      m_psTargetRxFunctor = ps_rx_functor;
+   }
+
 private:
-public:
+
    bool ReadAck();
+
    bool ReadResp();
+
    void Write(ECommand e_command, const uint8_t* pun_data, uint8_t un_data_length);
+
+public:
+
+   STxFunctor* m_psTargetTxFunctor;
+   SRxFunctor* m_psTargetRxFunctor;
+   STxFunctor* m_psInitiatorTxFunctor;
+   SRxFunctor* m_psInitiatorRxFunctor;
+
+   ECommand m_eSelectedCommand;
+   EState m_eState;
+
+   /* shared data buffer for reading / writing commands */
+   static uint8_t m_punTxRxBuffer[64];
+   static uint8_t m_unTxRxLength;
+
+   const static uint8_t m_punFirmwareVersion[4];
+
+   const static uint8_t m_punConfigureSAMArguments[3];
+
+   const static uint8_t m_punTgInitAsTargetArguments[37];
+   const static uint8_t m_punInJumpForDEPArguments[8];
 
 public:
 
@@ -97,7 +136,7 @@ public:
       TgSetMetaData         = 0x94,
       TgGetInitiatorCommand = 0x88,
       TgResponseToInitiator = 0x90,
-      TgGetTargetStatus     = 0x8A
+      TgGetTargetStatus     = 0x8A,
    };
 
    enum class EEvent {
@@ -107,28 +146,6 @@ public:
    enum class EState {
       Standby = 0, Ready, WaitingForAck, WaitingForResp, Failed,
    };
-
-public:
-   STxFunctor& m_sTargetTxFunctor;
-   SRxFunctor& m_sTargetRxFunctor;
-   STxFunctor& m_sInitiatorTxFunctor;
-   SRxFunctor& m_sInitiatorRxFunctor;
-
-   ECommand m_eSelectedCommand;
-   EState m_eState;
-
-private:
-
-   /* shared data buffer for reading / writing commands */
-   static uint8_t m_punTxRxBuffer[64];
-   static uint8_t m_unTxRxLength;
-
-   const static uint8_t m_punFirmwareVersion[4];
-
-   const static uint8_t m_punConfigureSAMArguments[3];
-
-   const static uint8_t m_punTgInitAsTargetArguments[37];
-   const static uint8_t m_punInJumpForDEPArguments[8];
 };
 
 #endif

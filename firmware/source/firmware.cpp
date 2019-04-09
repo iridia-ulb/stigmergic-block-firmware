@@ -3,20 +3,14 @@
 /* main function that runs the firmware */
 int main(void)
 {
+   /* Configure the BQ24075 monitoring pins */
+   DDRD &= ~PWR_MON_MASK;  // set as input
+   PORTD &= ~PWR_MON_MASK; // disable pull ups
+
    /* FILE structs for fprintf */
    FILE tuart, huart;
 
    /* Set up FILE structs for fprintf */                           
-   fdev_setup_stream(&tuart,
-                     [](char c_to_write, FILE* pf_stream) {
-                        CFirmware::GetInstance().GetTUARTController().Write(c_to_write);
-                        return 1;
-                     },
-                     [](FILE* pf_stream) {
-                        return int(CFirmware::GetInstance().GetTUARTController().Read());
-                     },
-                     _FDEV_SETUP_RW);
-
    fdev_setup_stream(&huart, 
                      [](char c_to_write, FILE* pf_stream) {
                         CHUARTController::GetInstance().Write(c_to_write);
@@ -39,25 +33,25 @@ int main(void)
 const char* CFirmware::GetPortString(CPortController::EPort ePort) {
    switch(ePort) {
    case CPortController::EPort::NORTH:
-      return "NORTH";
+      return "N";
       break;
    case CPortController::EPort::EAST:
-      return "EAST";
+      return "E";
       break;
    case CPortController::EPort::SOUTH:
-      return "SOUTH";
+      return "S";
       break;
    case CPortController::EPort::WEST:
-      return "WEST";
+      return "W";
       break;
    case CPortController::EPort::TOP:
-      return "TOP";
+      return "T";
       break;
    case CPortController::EPort::BOTTOM:
-      return "BOTTOM";
+      return "B";
       break;
    default:
-      return "INVALID";
+      return "X";
       break;
    }
 }
@@ -65,133 +59,60 @@ const char* CFirmware::GetPortString(CPortController::EPort ePort) {
 /***********************************************************/
 /***********************************************************/
 
-void CFirmware::DetectPorts() {
-   for(CPortController::EPort& ePort : m_peAllPorts) {
-      if(m_cPortController.IsPortConnected(ePort)) {
-#ifdef DEBUG
-         fprintf(m_psOutputUART, "%s connected\r\n", GetPortString(ePort));
-#endif
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort == CPortController::EPort::NULLPORT) {
-               eConnectedPort = ePort;
-               break;
-            }
-         }         
-      }
-      else {
-#ifdef DEBUG
-         fprintf(m_psOutputUART, "%s disconnected\r\n", GetPortString(ePort));
-#endif
+namespace Task {
+
+#define RGB_RED_OFFSET    0
+#define RGB_GREEN_OFFSET  1
+#define RGB_BLUE_OFFSET   2
+#define RGB_UNUSED_OFFSET 3
+
+#define RGB_LEDS_PER_FACE 4
+
+   void SetLEDColors(uint8_t unRed, uint8_t unGreen, uint8_t unBlue) {
+      for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
+         CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
+                                       RGB_RED_OFFSET, unRed);
+         CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
+                                       RGB_GREEN_OFFSET, unGreen);
+         CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
+                                       RGB_BLUE_OFFSET, unBlue);
       }
    }
-   m_cPortController.SelectPort(CPortController::EPort::NULLPORT);
+
+
+   void SetLEDModes(CLEDController::EMode e_mode) {
+      for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
+         CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE 
+                                 + RGB_RED_OFFSET, e_mode);
+         CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
+                                 RGB_GREEN_OFFSET, e_mode);
+         CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
+                                 RGB_BLUE_OFFSET, e_mode);
+         CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
+                                 RGB_UNUSED_OFFSET, CLEDController::EMode::OFF);
+      }
+   }
 }
 
 /***********************************************************/
 /***********************************************************/
 
-bool CFirmware::InitXbee() {
+#define MPU6050_ADDR               0x68
 
-   const uint8_t *ppunXbeeConfig[] = {
-      (const uint8_t*)"+++",
-      (const uint8_t*)"ATRE\r\n",
-      (const uint8_t*)"ATID 2003\r\n",
-      (const uint8_t*)"ATDH 0013A200\r\n",
-      (const uint8_t*)"ATDL 40C262B9\r\n",
-      (const uint8_t*)"ATCN\r\n"};
-
-   enum class EInitXbeeState {
-      RESET,
-      CONFIG_TX,
-      CONFIG_WAIT_FOR_RX,
-   } eInitXbeeState = EInitXbeeState::RESET;
-
-   bool bInitInProgress = true;
-   bool bInitSuccess = true;
-
-   uint8_t unXbeeCmdIdx = 0;
-   uint8_t unTimeout = 0;
-   uint8_t unAttempts = 0;
-   
-   struct SRxBuffer {
-      uint8_t Buffer[8];
-      uint8_t Index;
-   } sRxBuffer = {{}, 0};
-   
-   while(bInitInProgress) {
-      switch(eInitXbeeState) {
-      case EInitXbeeState::RESET:
-         fprintf(m_psOutputUART, "XB_RST\r\n");
-         PORTD &= ~XBEE_RST_PIN; // drive xbee reset pin low (enable)
-         DDRD |= XBEE_RST_PIN;   // set xbee reset pin as output
-         CClock::GetInstance().Delay(50);
-         PORTD |= XBEE_RST_PIN;  // drive xbee reset pin high (disable)
-         CClock::GetInstance().Delay(1000);   // allow time for Xbee to boot
-         eInitXbeeState = EInitXbeeState::CONFIG_TX;
-         continue;
-         break;
-      case EInitXbeeState::CONFIG_TX:
-         if(unAttempts > 3) {
-            
-         }
-         fprintf(m_psOutputUART, "XB_CFG_TX\r\n");
-         for(uint8_t unCmdCharIdx = 0;
-             ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx] != '\0';
-             unCmdCharIdx++) {
-            m_cTUARTController.Write(ppunXbeeConfig[unXbeeCmdIdx][unCmdCharIdx]);
-         }
-         eInitXbeeState = EInitXbeeState::CONFIG_WAIT_FOR_RX;
-         unAttempts++;
-         sRxBuffer.Index = 0;
-         unTimeout = 0;
-         continue;
-         break;
-      case EInitXbeeState::CONFIG_WAIT_FOR_RX: // RX_ACK
-         fprintf(m_psOutputUART, "XB_CFG_RX\r\n");
-         CClock::GetInstance().Delay(250);
-         while(m_cTUARTController.Available() && sRxBuffer.Index < 8) {
-            sRxBuffer.Buffer[sRxBuffer.Index++] = m_cTUARTController.Read();
-         }
-         
-         if(sRxBuffer.Index > 2 &&
-            sRxBuffer.Buffer[0] == 'O' &&
-            sRxBuffer.Buffer[1] == 'K' &&
-            sRxBuffer.Buffer[2] == '\r') {
-            if(unXbeeCmdIdx < 5) {
-               /* send next AT command */
-               unXbeeCmdIdx++;
-               eInitXbeeState = EInitXbeeState::CONFIG_TX;
-            }
-            else {
-               /* XBEE configured successfully */
-               bInitInProgress = false;           
-            }
-         }
-         else {
-            unTimeout++;
-            if(unTimeout > 10) {
-               if(unAttempts > 3) {
-                  bInitInProgress = false;
-                  bInitSuccess = false;
-               }
-               else {
-                  eInitXbeeState = EInitXbeeState::CONFIG_TX;
-               }
-            }
-         }
-         continue;
-         break;
-      }
-   }
-   /* Flush the input buffer */
-   while(CFirmware::GetInstance().GetTUARTController().Available()) {
-      CFirmware::GetInstance().GetTUARTController().Read();
-   }
-   return bInitSuccess;
-}
-
-/***********************************************************/
-/***********************************************************/
+enum class EMPU6050Register : uint8_t {
+   /* MPU6050 Registers */
+   PWR_MGMT_1     = 0x6B, // R/W
+   PWR_MGMT_2     = 0x6C, // R/W
+   ACCEL_XOUT_H   = 0x3B, // R  
+   ACCEL_XOUT_L   = 0x3C, // R  
+   ACCEL_YOUT_H   = 0x3D, // R  
+   ACCEL_YOUT_L   = 0x3E, // R  
+   ACCEL_ZOUT_H   = 0x3F, // R  
+   ACCEL_ZOUT_L   = 0x40, // R  
+   TEMP_OUT_H     = 0x41, // R  
+   TEMP_OUT_L     = 0x42, // R  
+   WHOAMI         = 0x75  // R
+};
 
 bool CFirmware::InitMPU6050() {
    /* probe */
@@ -218,7 +139,7 @@ void CFirmware::TestAccelerometer() {
            int16_t((punBuffer[0] << 8) | punBuffer[1]),
            int16_t((punBuffer[2] << 8) | punBuffer[3]),
            int16_t((punBuffer[4] << 8) | punBuffer[5]),
-           (int16_t((punBuffer[6] << 8) | punBuffer[7]) + 12412) / 340);  
+           (int16_t((punBuffer[6] << 8) | punBuffer[7]) + 12412) / 340);
 }
 
 /***********************************************************/
@@ -234,329 +155,179 @@ void CFirmware::TestPMIC() {
 /***********************************************************/
 /***********************************************************/
 
-void CFirmware::TestLEDs() {
-   for(uint8_t unColor = 0; unColor < 3; unColor++) {
-      for(uint8_t unVal = 0x00; unVal < 0x40; unVal++) {
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CLEDController::SetBrightness(unColor + 0, unVal);
-               CLEDController::SetBrightness(unColor + 4, unVal);
-               CLEDController::SetBrightness(unColor + 8, unVal);
-               CLEDController::SetBrightness(unColor + 12, unVal);
-            }
-         }
-         CClock::GetInstance().Delay(1);
-      }
-      for(uint8_t unVal = 0x40; unVal > 0x00; unVal--) {
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CLEDController::SetBrightness(unColor + 0, unVal);
-               CLEDController::SetBrightness(unColor + 4, unVal);
-               CLEDController::SetBrightness(unColor + 8, unVal);
-               CLEDController::SetBrightness(unColor + 12, unVal);
-            }  
-         }
-         CClock::GetInstance().Delay(1);
-      }
-      for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-         if(eConnectedPort != CPortController::EPort::NULLPORT) {
-            CLEDController::SetBrightness(unColor + 0, 0x00);
-            CLEDController::SetBrightness(unColor + 4, 0x00);
-            CLEDController::SetBrightness(unColor + 8, 0x00);
-            CLEDController::SetBrightness(unColor + 12, 0x00);
-         }
-      }
-   }
-}
-
-/***********************************************************/
-/***********************************************************/
-
 void CFirmware::Reset() {
    PORTD |= 0x10;
    DDRD |= 0x10;
 }
 
+/***********************************************************/
+/***********************************************************/
+
 #define TEXT_BOLD "\e[1m"
 #define TEXT_NORMAL "\e[0m"
-
-/***********************************************************/
-/***********************************************************/
 
 void Log(const char* pch_message, bool b_bold = false) {
    uint32_t un_time = CClock::GetInstance().GetMilliseconds();
    fprintf(CFirmware::GetInstance().m_psOutputUART, "[%05lu] \e[1m%s\e[0m\r\n", un_time, pch_message);
 }
 
-int CFirmware::Exec() {
-   /* Configure the BQ24075 monitoring pins */
-   DDRD &= ~PWR_MON_MASK;  // set as input
-   PORTD &= ~PWR_MON_MASK; // disable pull ups
 
+/***********************************************************/
+/***********************************************************/
+
+int CFirmware::Exec() {
    /* Enable interrupts */
    CInterruptController::GetInstance().Enable();
    /* Begin Init */
    Log("Stigmergic Block Initialization", true);
 
    /* Configure port controller, detect ports */
-   fprintf(m_psOutputUART, "[%05lu] Detecting Ports\r\n", CClock::GetInstance().GetMilliseconds());
+   fprintf(m_psOutputUART, "[%05lu] Detecting ports\r\n", CClock::GetInstance().GetMilliseconds());
 
    /* Debug */
-   m_cPortController.SelectPort(CPortController::EPort::NULLPORT);
+   CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CClock::GetInstance().Delay(10);
-   m_cPortController.Init();
+   /* NFC controller power up */
+   CPortController::GetInstance().Init();
    CTWController::GetInstance().Disable();
-   DetectPorts();
+   /* detect faces */
+   for(SFace& sFace : m_psFaces) {
+      sFace.Connected = CPortController::GetInstance().IsPortConnected(sFace.Port);
+   }
+   CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CTWController::GetInstance().Enable();
 
-   fprintf(m_psOutputUART, "[%05lu] Connected Ports: ", CClock::GetInstance().GetMilliseconds());
-   for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-      if(eConnectedPort != CPortController::EPort::NULLPORT) {
-         fprintf(m_psOutputUART, "%s ", GetPortString(eConnectedPort));
+   fprintf(m_psOutputUART, "[%05lu] Connected faces: ", CClock::GetInstance().GetMilliseconds());
+   for(SFace& sFace : m_psFaces) {
+      if(sFace.Connected) {
+         fprintf(m_psOutputUART, "%s ", GetPortString(sFace.Port));
       }
    }
    fprintf(m_psOutputUART, "\r\n");
 
    /* Configure accelerometer */
    /* Disconnect ports before running accelerometer init routine */
-   m_cPortController.SelectPort(CPortController::EPort::NULLPORT);
+   CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CClock::GetInstance().Delay(10);
    fprintf(m_psOutputUART, 
-           "[%05lu] Configuring MPU6050: %s\r\n", 
+           "[%05lu] Initialize MPU6050: %s\r\n", 
            CClock::GetInstance().GetMilliseconds(), 
-           InitMPU6050()?"success":"failed");
+           InitMPU6050() ? "success" : "failure");
 
-   /* Init on face devices */
-   for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-      if(eConnectedPort != CPortController::EPort::NULLPORT) {
-         m_cPortController.SelectPort(eConnectedPort);
-         fprintf(m_psOutputUART, "[%05lu] Init PCA9635 on %s\r\n",
+   /* Initialize faces */
+   for(SFace& sFace : m_psFaces) {
+      if(sFace.Connected) {
+         CPortController::GetInstance().SelectPort(sFace.Port);
+         fprintf(m_psOutputUART, "[%05lu] Initialize %s face\r\n",
                  CClock::GetInstance().GetMilliseconds(),
-                 GetPortString(eConnectedPort));
+                 GetPortString(sFace.Port));
+         /* Initialize LEDs */
          CLEDController::Init();
-         CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode::PWM);
-         CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x00,0x00);
+         Task::SetLEDModes(CLEDController::EMode::PWM);
+         Task::SetLEDColors(0x00,0x00,0x00);
+         /* Start initialization of NFC controllers */
+         sFace.NFC.AppendEvent(CNFCController::EEvent::Init);
       }
    }
 
-   InteractiveMode();
+   /* set the detectors */
+   for(SFace& sFace : m_psFaces) {
+      sFace.NFC.SetTargetRxFunctor(&sFace.RxDetector);
+      sFace.NFC.SetInitiatorRxFunctor(&sFace.RxDetector);
+   }
 
+   /* begin infinite loop */
+   for(;;) {
+      /* check for interrupts */
+      uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
+      /* forward interrupts to faces */
+      for(SFace& sFace : m_psFaces) {
+         if(sFace.Connected) {
+            if((unIRQs >> static_cast<uint8_t>(sFace.Port)) & 0x01) {
+               CPortController::GetInstance().SelectPort(sFace.Port);
+               sFace.NFC.AppendEvent(CNFCController::EEvent::Interrupt);
+               Debug(sFace);
+               /* recheck the interrupts */
+               unIRQs = CPortController::GetInstance().GetInterrupts();
+            }
+            else {
+               /* with low probablity */
+               if(GetRandomNumber<uint8_t>(0,255) < 4) {
+                  sFace.NFC.AppendEvent(CNFCController::EEvent::Transceive);
+                  //Debug(sFace);
+               }
+            }
+         }
+      }
+
+      uint8_t unActivatedFaceCount = 0;
+      uint32_t unTime = CClock::GetInstance().GetMilliseconds();
+      for(SFace& sFace : m_psFaces) {
+         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 500)) {
+            unActivatedFaceCount++;
+         }
+      }
+      for(SFace& sFace : m_psFaces) {
+         if(sFace.Connected) {
+            CPortController::GetInstance().SelectPort(sFace.Port);
+            Task::SetLEDColors(unActivatedFaceCount == 1 ? 0x05 : 0x00,
+                               unActivatedFaceCount == 2 ? 0x05 : 0x00,
+                               unActivatedFaceCount == 3 ? 0x05 : 0x00);
+         }
+      }
+   }
    return 0;
 }
 
 /***********************************************************/
 /***********************************************************/
 
-void CFirmware::InteractiveMode() {
-   CNFCController::STxFunctor sTxFunctor;
-   CNFCController::SRxFunctor sRxFunctor;
-
-   struct : CNFCController::STxFunctor {
-      virtual uint8_t operator()(uint8_t* pun_data, uint8_t un_length) {
-         pun_data[0] = 'b';
-         pun_data[1] = 'y';
-         pun_data[2] = 'e';
-         return 3;
-      }
-   } sMyTxFunctor;
-
-
-   struct SMySRxFunctor : CNFCController::SRxFunctor {
-      virtual void operator()(const uint8_t* pun_data, uint8_t un_length) {
-         LastRxTime = CClock::GetInstance().GetMilliseconds();
-      }
-
-      uint32_t LastRxTime;
-   } sMyRxFunctor;
-
-   CNFCController cNFCController(sMyTxFunctor, sMyRxFunctor, sTxFunctor, sRxFunctor);
-
-   uint8_t unInput = 0;
-
-   for(;;) {
-      if(CHUARTController::GetInstance().HasData()) {
-         unInput = CHUARTController::GetInstance().Read();
-         /* flush */
-         while(CHUARTController::GetInstance().HasData()) {
-            CHUARTController::GetInstance().Read();
-         }
-      }
-      else {
-         unInput = 0;
-      }
-      switch(unInput) {
-      case 'a':
-         TestAccelerometer();
-         break;
-      case 'b':
-         // assumes divider with 330k and 1M
-         fprintf(m_psOutputUART,
-                 "Battery = %umV\r\n", 
-                 m_cADCController.GetValue(CADCController::EChannel::ADC7) * 17);
-         break;
-      case '1':
-         /* Q1 (U+, V+) */
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x03,0x00,0x03);
-            }
-         }
-         break;
-      case '2':
-         /* Q2 (U-, V+) */
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x05,0x01,0x00);
-            }
-         }
-         break;
-      case '3':
-         /* Q3 (U-, V-) */
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x01,0x05,0x00);
-            }
-         }
-         break;
-      case '4':
-         /* Q4 (U+, V-) */        
-         for(CPortController::EPort& eConnectedPort : m_peConnectedPorts) {
-            if(eConnectedPort != CPortController::EPort::NULLPORT) {
-               m_cPortController.SelectPort(eConnectedPort);
-               CBlockLEDRoutines::SetAllColorsOnFace(0x00,0x03,0x03);
-            }
-         }
-         break;
-      case 'i':
-         fprintf(m_psOutputUART, "IRQ: 0x%02X\r\n", m_cPortController.GetInterrupts());
-         break;
-      case 'I':
-         cNFCController.AppendEvent(CNFCController::EEvent::Interrupt);
-         break;
-      case 'R':
-         cNFCController.ReadAck();
-         break;
-      case 'r':
-         Reset();
-         break;
-      case 's':
-         fprintf(m_psOutputUART, "STT: 0x%02x\r\n", static_cast<uint8_t>(cNFCController.m_eState));
-         fprintf(m_psOutputUART, "CMD: 0x%02x\r\n", static_cast<uint8_t>(cNFCController.m_eSelectedCommand));
-         break;
-      case 't':
-         cNFCController.AppendEvent(CNFCController::EEvent::Transceive);
-         break;
-      case 'u':
-         fprintf(m_psOutputUART, "Uptime = %lums\r\n", CClock::GetInstance().GetMilliseconds());
-         break;
-      default:
-         uint8_t unIRQs = m_cPortController.GetInterrupts();
-         if(unIRQs != 0x00) {
-            switch(cNFCController.m_eState) {
-            case CNFCController::EState::Standby:
-               fprintf(m_psOutputUART, "S:");
-               break;
-            case CNFCController::EState::Ready:
-               fprintf(m_psOutputUART, "R:");
-               break;
-            case CNFCController::EState::WaitingForAck:
-               fprintf(m_psOutputUART, "WA:");
-               break;
-            case CNFCController::EState::WaitingForResp:
-               fprintf(m_psOutputUART, "WR:");
-               break;
-            case CNFCController::EState::Failed:
-               fprintf(m_psOutputUART, "F:");
-               break;
-            }
-            switch(cNFCController.m_eSelectedCommand) {
-            case CNFCController::ECommand::GetFirmwareVersion:
-               fprintf(m_psOutputUART, "GFV:");
-               break;
-            case CNFCController::ECommand::ConfigureSAM:
-               fprintf(m_psOutputUART, "CSAM:");
-               break;
-            case CNFCController::ECommand::InJumpForDEP:
-               fprintf(m_psOutputUART, "IJFD:");
-               break;
-            case CNFCController::ECommand::InDataExchange:
-               fprintf(m_psOutputUART, "IDE:");
-               break;
-            case CNFCController::ECommand::TgInitAsTarget:
-               fprintf(m_psOutputUART, "IAT:");
-               break;
-            case CNFCController::ECommand::TgGetData:
-               fprintf(m_psOutputUART, "TGD:");
-               break;
-            case CNFCController::ECommand::TgSetData:
-               fprintf(m_psOutputUART, "TSD:");
-               break;
-            default:
-               fprintf(m_psOutputUART, "0x%02x", static_cast<uint8_t>(cNFCController.m_eSelectedCommand));
-               break;
-            }
-            fprintf(m_psOutputUART, "\r\n");
-            for(CPortController::EPort eRxPort : m_peConnectedPorts) {
-               if(eRxPort != CPortController::EPort::NULLPORT) {
-                  if((unIRQs >> static_cast<uint8_t>(eRxPort)) & 0x01) {
-                     m_cPortController.SelectPort(eRxPort);
-                     cNFCController.AppendEvent(CNFCController::EEvent::Interrupt);
-                  }
-               }
-            }
-         }
-         break;
-      }
+void CFirmware::Debug(const SFace& s_face) {
+   fprintf(m_psOutputUART, "%s:", GetPortString(s_face.Port));
+   switch(s_face.NFC.m_eState) {
+   case CNFCController::EState::Standby:
+      fprintf(m_psOutputUART, "S:");
+      break;
+   case CNFCController::EState::Ready:
+      fprintf(m_psOutputUART, "R:");
+      break;
+   case CNFCController::EState::WaitingForAck:
+      fprintf(m_psOutputUART, "WA:");
+      break;
+   case CNFCController::EState::WaitingForResp:
+      fprintf(m_psOutputUART, "WR:");
+      break;
+   case CNFCController::EState::Failed:
+      fprintf(m_psOutputUART, "F:");
+      break;
    }
-}
-
-/***********************************************************/
-/***********************************************************/
-
-#define RGB_RED_OFFSET    0
-#define RGB_GREEN_OFFSET  1
-#define RGB_BLUE_OFFSET   2
-#define RGB_UNUSED_OFFSET 3
-
-#define RGB_LEDS_PER_FACE 4
-
-/***********************************************************/
-/***********************************************************/
-
-
-void CFirmware::CBlockLEDRoutines::SetAllColorsOnFace(uint8_t unRed, 
-                                                     uint8_t unGreen, 
-                                                     uint8_t unBlue) {
-   for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
-      CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
-                                    RGB_RED_OFFSET, unRed);
-      CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
-                                    RGB_GREEN_OFFSET, unGreen);
-      CLEDController::SetBrightness(unLedIdx * RGB_LEDS_PER_FACE +
-                                    RGB_BLUE_OFFSET, unBlue);
+   switch(s_face.NFC.m_eSelectedCommand) {
+   case CNFCController::ECommand::GetFirmwareVersion:
+      fprintf(m_psOutputUART, "GFV:");
+      break;
+   case CNFCController::ECommand::ConfigureSAM:
+      fprintf(m_psOutputUART, "CSAM:");
+      break;
+   case CNFCController::ECommand::InJumpForDEP:
+      fprintf(m_psOutputUART, "IJFD:");
+      break;
+   case CNFCController::ECommand::InDataExchange:
+      fprintf(m_psOutputUART, "IDE:");
+      break;
+   case CNFCController::ECommand::TgInitAsTarget:
+      fprintf(m_psOutputUART, "IAT:");
+      break;
+   case CNFCController::ECommand::TgGetData:
+      fprintf(m_psOutputUART, "TGD:");
+      break;
+   case CNFCController::ECommand::TgSetData:
+      fprintf(m_psOutputUART, "TSD:");
+      break;
+   default:
+      fprintf(m_psOutputUART, "0x%02x", static_cast<uint8_t>(s_face.NFC.m_eSelectedCommand));
+      break;
    }
-}
-
-
-/***********************************************************/
-/***********************************************************/
-
-void CFirmware::CBlockLEDRoutines::SetAllModesOnFace(CLEDController::EMode e_mode) {
-   for(uint8_t unLedIdx = 0; unLedIdx < RGB_LEDS_PER_FACE; unLedIdx++) {
-      CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE 
-                              + RGB_RED_OFFSET, e_mode);
-      CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
-                              RGB_GREEN_OFFSET, e_mode);
-      CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
-                              RGB_BLUE_OFFSET, e_mode);
-      CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
-                              RGB_UNUSED_OFFSET, CLEDController::EMode::OFF);
-   }
+   fprintf(m_psOutputUART, "\r\n");
 }
 
 

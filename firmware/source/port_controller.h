@@ -15,7 +15,9 @@
 
 
 class CPortController {
+
 public:
+
    enum class EPort : uint8_t {
       NORTH  = 0,
       EAST   = 1,
@@ -25,8 +27,13 @@ public:
       BOTTOM = 5,
       NULLPORT = 8
    };
+
 public:
-   CPortController();
+
+   static CPortController& GetInstance() {
+      static CPortController cInstance;
+      return cInstance;
+   }
 
    void Init();
    
@@ -39,6 +46,8 @@ public:
    bool IsPortConnected(EPort e_target);
 
 private:
+
+   CPortController();
    
    enum class EPCA9554Register : uint8_t {
       INPUT          = 0x00, // R
