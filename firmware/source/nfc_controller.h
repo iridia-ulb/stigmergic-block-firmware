@@ -34,19 +34,19 @@ public:
    enum class EState;
 
    struct STxFunctor {
-      virtual uint8_t operator()(uint8_t* pun_data, uint8_t un_length) const;
+      virtual uint8_t operator()(uint8_t* pun_data, uint8_t un_length);
    };
 
    struct SRxFunctor {
-      virtual void operator()(const uint8_t* pun_data, uint8_t un_length) const;
+      virtual void operator()(const uint8_t* pun_data, uint8_t un_length);
    };
 
 public:
 
-   CNFCController(const STxFunctor& s_target_tx_functor = STxFunctor(),
-                  const SRxFunctor& s_target_rx_functor = SRxFunctor(),
-                  const STxFunctor& s_initiator_tx_functor = STxFunctor(),
-                  const SRxFunctor& s_initiator_rx_functor = SRxFunctor());
+   CNFCController(STxFunctor& s_target_tx_functor,
+                  SRxFunctor& s_target_rx_functor,
+                  STxFunctor& s_initiator_tx_functor,
+                  SRxFunctor& s_initiator_rx_functor);
 
    bool AppendEvent(EEvent e_event);
 
@@ -58,7 +58,7 @@ public:
    }
 
 private:
-
+public:
    bool ReadAck();
    bool ReadResp();
    void Write(ECommand e_command, const uint8_t* pun_data, uint8_t un_data_length);
@@ -109,10 +109,10 @@ public:
    };
 
 public:
-   const STxFunctor& m_sTargetTxFunctor;
-   const SRxFunctor& m_sTargetRxFunctor;
-   const STxFunctor& m_sInitiatorTxFunctor;
-   const SRxFunctor& m_sInitiatorRxFunctor;
+   STxFunctor& m_sTargetTxFunctor;
+   SRxFunctor& m_sTargetRxFunctor;
+   STxFunctor& m_sInitiatorTxFunctor;
+   SRxFunctor& m_sInitiatorRxFunctor;
 
    ECommand m_eSelectedCommand;
    EState m_eState;

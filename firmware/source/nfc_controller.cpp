@@ -1,4 +1,8 @@
+
+//TODO remove this
 #include <firmware.h>
+
+#include <clock.h>
 
 #include "nfc_controller.h"
 
@@ -44,36 +48,36 @@ const uint8_t CNFCController::m_punInJumpForDEPArguments[] = {
    0x02, 0x01, 0x00, 0xFF, 0xFF, 0x00, 0x00
 };
 
-
 /***********************************************************/
 /***********************************************************/
 
-uint8_t CNFCController::STxFunctor::operator()(uint8_t* pun_data, uint8_t un_length) const {
+uint8_t CNFCController::STxFunctor::operator()(uint8_t* pun_data, uint8_t un_length) {
 //   return 0;
-   pun_data[0] = 't';
+   pun_data[0] = 'h';
    pun_data[1] = 'e';
-   pun_data[2] = 's';
-   pun_data[3] = 't';
-   return 4;
+   pun_data[2] = 'l';
+   pun_data[3] = 'l';
+   pun_data[4] = 'o';
+   return 5;
 };
 
 /***********************************************************/
 /***********************************************************/
 
-void CNFCController::SRxFunctor::operator()(const uint8_t* pun_data, uint8_t un_length) const {
+void CNFCController::SRxFunctor::operator()(const uint8_t* pun_data, uint8_t un_length) {
    for(uint8_t i = 0; i < un_length; i++)
-      fprintf(Firmware::GetInstance().m_psHUART, "0x%02x ", pun_data[i]);
-   fprintf(Firmware::GetInstance().m_psHUART, "\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "%c", static_cast<char>(pun_data[i]));
+   fprintf(CFirmware::GetInstance().m_psHUART, "\r\n");
    return;
 };
 
 /***********************************************************/
 /***********************************************************/
 
-CNFCController::CNFCController(const STxFunctor& s_target_tx_functor,
-                               const SRxFunctor& s_target_rx_functor,
-                               const STxFunctor& s_initiator_tx_functor,
-                               const SRxFunctor& s_initiator_rx_functor) :
+CNFCController::CNFCController(STxFunctor& s_target_tx_functor,
+                               SRxFunctor& s_target_rx_functor,
+                               STxFunctor& s_initiator_tx_functor,
+                               SRxFunctor& s_initiator_rx_functor) :
    m_sTargetTxFunctor(s_target_tx_functor),
    m_sTargetRxFunctor(s_target_rx_functor),
    m_sInitiatorTxFunctor(s_initiator_tx_functor),
@@ -99,6 +103,9 @@ bool CNFCController::AppendEvent(EEvent e_event) {
 /***********************************************************/
 /***********************************************************/
 
+#define TEXT_RED "\e[1;31m"
+#define TEXT_NORMAL "\e[0m"
+
 /* private: only accepts events if ready */
 bool CNFCController::ProcessEvent(EEvent e_event) {
    switch(m_eState) {
@@ -107,14 +114,16 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
    case EState::Ready:
       break;
    case EState::WaitingForAck:
-      if(e_event == EEvent::Interrupt && ReadAck()) {
-         m_eState = EState::WaitingForResp;
+      if(e_event == EEvent::Interrupt) {
+         if(ReadAck()) {
+            m_eState = EState::WaitingForResp;
+         }
+         else {
+            fprintf(CFirmware::GetInstance().m_psHUART, "NAck\r\n");
+            m_eState = EState::Failed;
+         }
       }
-      else {
-         m_eState = EState::Failed;
-      }
-      break;
-   case EState::WaitingForResp:
+      break;   case EState::WaitingForResp:
       if(e_event == EEvent::Interrupt && ReadResp()) {
          switch(m_eSelectedCommand) {
          case ECommand::GetFirmwareVersion:
@@ -134,8 +143,9 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                Write(ECommand::TgSetData, m_punTxRxBuffer, m_sTargetTxFunctor(m_punTxRxBuffer, sizeof m_punTxRxBuffer));
             }
             else {
-               fprintf(Firmware::GetInstance().m_psHUART, "GD 0x%02x\r\n", m_punTxRxBuffer[0]);
-               m_eState = EState::Failed;
+               fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "TGD:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
+               /* failure: try return to target mode */
+               Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             break;
          case ECommand::TgSetData:
@@ -143,8 +153,9 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             else {
-               fprintf(Firmware::GetInstance().m_psHUART, "SD 0x%02x\r\n", m_punTxRxBuffer[0]);
-               m_eState = EState::Failed;
+               fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "TSD:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
+               /* failure: try return to target mode */
+               Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             break;
          case ECommand::InJumpForDEP:
@@ -155,8 +166,9 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                      m_sInitiatorTxFunctor(m_punTxRxBuffer + 1, (sizeof m_punTxRxBuffer) - 1));
             }
             else {
-               fprintf(Firmware::GetInstance().m_psHUART, "DEP 0x%02x\r\n", m_punTxRxBuffer[0]);
-               m_eState = EState::Failed;
+               fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "DEP:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
+               /* failure: try return to target mode */
+               Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             break;
          case ECommand::InDataExchange:
@@ -166,8 +178,9 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             else {
-               fprintf(Firmware::GetInstance().m_psHUART, "EX 0x%02x\r\n", m_punTxRxBuffer[0]);
-               m_eState = EState::Failed;
+               fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "IDX:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
+               /* failure: try return to target mode */
+               Write(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
             }
             break;
          default:
@@ -177,11 +190,13 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
       }
       else if(e_event == EEvent::Transceive &&
               m_eSelectedCommand == ECommand::TgInitAsTarget) {
+         CClock::GetInstance().Delay(10);
          Write(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
       }
       break;
    case EState::Failed:
-      fprintf(Firmware::GetInstance().m_psHUART, "Failure!\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "Failure!\r\n");
+      /* try to reset */
       Write(ECommand::GetFirmwareVersion, nullptr, 0);
       break;
    }
@@ -193,6 +208,7 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
 
 bool CNFCController::ReadAck() {
    CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::RECEIVE);
+   /*
    bool bAcknowledged =
       (CTWController::GetInstance().Receive() == PN532_I2C_READY) &&
       (CTWController::GetInstance().Receive() == PN532_PREAMBLE) &&
@@ -201,8 +217,30 @@ bool CNFCController::ReadAck() {
       (CTWController::GetInstance().Receive() == PN532_ACKFRAME1) &&
       (CTWController::GetInstance().Receive() == PN532_ACKFRAME2) &&
       (CTWController::GetInstance().Receive() == PN532_POSTAMBLE);
+   */
+
+   uint8_t arr[7];
+   for(int i = 0; i < 7; i++) {
+      //fprintf(CFirmware::GetInstance().m_psHUART, "<");
+      arr[i] = CTWController::GetInstance().Receive();
+      //fprintf(CFirmware::GetInstance().m_psHUART, ">");
+      //fprintf(CFirmware::GetInstance().m_psHUART, "%02x ", arr[i]);
+   }
+   
    CTWController::GetInstance().Receive(false);
    CTWController::GetInstance().Stop();
+
+   //fprintf(CFirmware::GetInstance().m_psHUART, "\r\n");
+
+   bool bAcknowledged =
+      (arr[0] == PN532_I2C_READY) &&
+      (arr[1] == PN532_PREAMBLE) &&
+      (arr[2] == PN532_STARTCODE1) &&
+      (arr[3] == PN532_STARTCODE2) &&
+      (arr[4] == PN532_ACKFRAME1) &&
+      (arr[5] == PN532_ACKFRAME2) &&
+      (arr[6] == PN532_POSTAMBLE);
+
    return bAcknowledged;
 }
 
@@ -217,7 +255,7 @@ bool CNFCController::ReadResp() {
       (CTWController::GetInstance().Receive() != PN532_PREAMBLE)   ||
       (CTWController::GetInstance().Receive() != PN532_STARTCODE1) ||
       (CTWController::GetInstance().Receive() != PN532_STARTCODE2)) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E1\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E1\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
@@ -226,7 +264,7 @@ bool CNFCController::ReadResp() {
    uint8_t unPacketLength = CTWController::GetInstance().Receive();
    uint8_t unPacketLengthChecksum = CTWController::GetInstance().Receive();
    if(((unPacketLength + unPacketLengthChecksum) & 0xFF) != 0u) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E2\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E2\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
@@ -234,22 +272,23 @@ bool CNFCController::ReadResp() {
    /* store the number of returned bytes without the command byte and
       the direction byte */
    m_unTxRxLength = unPacketLength - 2u;
+   /* prevent buffer overflow */
    if(m_unTxRxLength > sizeof m_punTxRxBuffer) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E3\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E3\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
    }
    /* check the frame direction */
    if(CTWController::GetInstance().Receive() != PN532_PN532TOHOST) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E4\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E4\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
    }
    /* check if the response is to the correct command */
    if(CTWController::GetInstance().Receive() != static_cast<uint8_t>(m_eSelectedCommand) + 1u) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E5\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E5\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
@@ -267,7 +306,7 @@ bool CNFCController::ReadResp() {
    /* validate the data checksum */
    unChecksum += CTWController::GetInstance().Receive();
    if(unChecksum != 0x00) {
-      fprintf(Firmware::GetInstance().m_psHUART, "E6\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E6\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;

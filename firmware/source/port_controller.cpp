@@ -1,7 +1,9 @@
+// TODO remove
+#include <firmware.h>
+
 #include "port_controller.h"
 
 #include <avr/io.h>
-#include <firmware.h> // remove this, include timer instead
 #include "tw_controller.h"
 
 #define NUM_FACES 6
@@ -22,6 +24,8 @@ CPortController::CPortController() {
 
 
 void CPortController::Init() {
+   // TODO is method called anywhere? reset would be improved if we power cycled NFC chips on reset
+
    /* Configure the reset lines to the faces as outputs (driven high by default) */
    CTWController::GetInstance().Write(PCA9554_RST_ADDR, EPCA9554Register::CONFIG, 0xC0);
 }
@@ -75,14 +79,14 @@ bool CPortController::IsPortConnected(EPort e_target) {
    /* Make sure TWController is disabled before testing */
    // To avoid confusing devices, only use the clock line
    SelectPort(e_target);
-   Firmware::GetInstance().GetTimer().Delay(10);
+   CClock::GetInstance().Delay(10);
 
    PORTC &= ~PORTC_TWCLK_MASK;
    DDRC |= PORTC_TWCLK_MASK;
    DDRC &= ~PORTC_TWCLK_MASK;
    PORTC |= PORTC_TWCLK_MASK;
 
-   Firmware::GetInstance().GetTimer().Delay(10);
+   CClock::GetInstance().Delay(10);
 
    return ((PINC & PORTC_TWCLK_MASK) != 0);
 }

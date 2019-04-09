@@ -20,7 +20,7 @@
 #include <led_controller.h>
 #include <port_controller.h>
 #include <adc_controller.h>
-#include <timer.h>
+#include <clock.h>
 
 #define NUM_PORTS 6
 
@@ -51,11 +51,12 @@ enum class EMPU6050Register : uint8_t {
 #define XBEE_RST_PIN   0x20
 
 
-class Firmware {
+class CFirmware {
 public:
       
-   static Firmware& GetInstance() {
-      return _firmware;
+   static CFirmware& GetInstance() {
+      static CFirmware cInstance;
+      return cInstance;
    }
 
    void SetFilePointers(FILE* ps_huart, FILE* ps_tuart) {
@@ -66,10 +67,6 @@ public:
 
    CTUARTController& GetTUARTController() {
       return m_cTUARTController;
-   }
-
-   CTimer& GetTimer() {
-      return m_cTimer;
    }
 
    int Exec();
@@ -103,16 +100,7 @@ private:
    void Reset();
 
    /* private constructor */
-   Firmware() :
-      m_cTimer(TCCR0A,
-               TCCR0A | (_BV(WGM00) | _BV(WGM01)),
-               TCCR0B,
-               TCCR0B | (_BV(CS00) | _BV(CS01)),
-               TIMSK0,
-               TIMSK0 | _BV(TOIE0),
-               TIFR0,
-               TCNT0,
-               TIMER0_OVF_vect_num),
+   CFirmware() :
       m_cPortController(),
       m_cTUARTController(9600,
                          TCCR1A,
@@ -126,8 +114,6 @@ private:
                          TIMER1_CAPT_vect_num,
                          TIMER1_COMPA_vect_num,
                          TIMER1_COMPB_vect_num) {}
-   
-   CTimer m_cTimer;
 
    CPortController m_cPortController;
 
@@ -156,9 +142,6 @@ private:
 
    CADCController m_cADCController;
 
-
-   static Firmware _firmware;
-   
 public: // TODO, don't make these public
     /* File structs for fprintf */
    FILE* m_psTUART;

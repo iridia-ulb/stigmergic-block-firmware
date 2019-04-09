@@ -1,6 +1,4 @@
-#include "timer.h"
-
-#include <avr/interrupt.h>
+#include "clock.h"
 
 #define CLOCK_CYCLES_PER_MICROSECOND() ( F_CPU / 1000000L )
 #define CLOCK_CYCLES_TO_MICROSECONDS(a) ( (a) / CLOCK_CYCLES_PER_MICROSECOND() )
@@ -27,34 +25,34 @@
 /****************************************/
 /****************************************/
 
-void CTimer::COverflowInterrupt::ServiceRoutine() {
+void CClock::COverflowInterrupt::ServiceRoutine() {
    /* copy readings to local variables so they can be stored in registers
       (volatile variables must be read from memory on every access) */
-   uint32_t unTimerMilliseconds = m_pcTimer->m_unTimerMilliseconds;
-   uint8_t  unTimerFraction = m_pcTimer->m_unTimerFraction;
+   uint32_t unTimerMilliseconds = m_pcClock->m_unTimerMilliseconds;
+   uint8_t  unTimerFraction = m_pcClock->m_unTimerFraction;
    unTimerMilliseconds += MILLIS_INC;
    unTimerFraction += FRACT_INC;
    if (unTimerFraction >= FRACT_MAX) {
       unTimerFraction -= FRACT_MAX;
       unTimerMilliseconds += 1;
    }
-   m_pcTimer->m_unTimerFraction = unTimerFraction;
-   m_pcTimer->m_unTimerMilliseconds = unTimerMilliseconds;
-   m_pcTimer->m_unOverflowCount++;
+   m_pcClock->m_unTimerFraction = unTimerFraction;
+   m_pcClock->m_unTimerMilliseconds = unTimerMilliseconds;
+   m_pcClock->m_unOverflowCount++;
 }
 
 /****************************************/
 /****************************************/
 
-CTimer::COverflowInterrupt::COverflowInterrupt(CTimer* pc_timer, uint8_t un_intr_vect_num) : 
-   m_pcTimer(pc_timer) {
+CClock::COverflowInterrupt::COverflowInterrupt(CClock* pc_timer, uint8_t un_intr_vect_num) : 
+   m_pcClock(pc_timer) {
    Register(this, un_intr_vect_num);
 }
 
 /****************************************/
 /****************************************/
 
-CTimer::CTimer(volatile uint8_t& un_ctrl_reg_a,
+CClock::CClock(volatile uint8_t& un_ctrl_reg_a,
                uint8_t un_ctrl_reg_a_config,
                volatile uint8_t& un_ctrl_reg_b,
                uint8_t un_ctrl_reg_b_config,
@@ -76,24 +74,12 @@ CTimer::CTimer(volatile uint8_t& un_ctrl_reg_a,
    m_unControlRegisterB = un_ctrl_reg_b_config;
    m_unInterruptMaskRegister = un_intr_mask_reg_config;
 
-
-   /* Enable timer 0 */
-   //sbi(TCCR0A, WGM01);
-   //sbi(TCCR0A, WGM00);
-   //TCCR0A |= (_BV(WGM00) | _BV(WGM01));
-    /* Set prescaler to 64 */
-   //sbi(TCCR0B, CS01);
-   //sbi(TCCR0B, CS00);
-   //TCCR0B |= (_BV(CS00) | _BV(CS01));
-   /* Enable overflow interrupt */
-   //sbi(TIMSK0, TOIE0);
-   //TIMSK0 |= _BV(TOIE0);
 }
 
 /****************************************/
 /****************************************/
 
-uint32_t CTimer::GetMilliseconds() {
+uint32_t CClock::GetMilliseconds() const {
    uint32_t m;
    CInterruptController::GetInstance().Disable();
    m = m_unTimerMilliseconds;
@@ -104,7 +90,7 @@ uint32_t CTimer::GetMilliseconds() {
 /****************************************/
 /****************************************/
 
-uint32_t CTimer::GetMicroseconds() {
+uint32_t CClock::GetMicroseconds() const {
    uint32_t m;
    uint8_t oldSREG = SREG, t;
    cli();
@@ -119,10 +105,10 @@ uint32_t CTimer::GetMicroseconds() {
 /****************************************/
 /****************************************/
 
-void CTimer::Delay(uint32_t un_delay_ms) {
-   uint16_t unStart = (uint16_t)GetMicroseconds();
+void CClock::Delay(uint32_t un_delay_ms) const {
+   uint16_t unStart = static_cast<uint16_t>(GetMicroseconds());
    while (un_delay_ms > 0) {
-      if (((uint16_t)GetMicroseconds() - unStart) >= 1000) {
+      if ((static_cast<uint16_t>(GetMicroseconds()) - unStart) >= 1000) {
          un_delay_ms--;
          unStart += 1000;
       }
