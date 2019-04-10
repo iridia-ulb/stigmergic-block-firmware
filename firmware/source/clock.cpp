@@ -80,11 +80,11 @@ CClock::CClock(volatile uint8_t& un_ctrl_reg_a,
 /****************************************/
 
 uint32_t CClock::GetMilliseconds() const {
-   uint32_t m;
+   uint32_t unMilliseconds;
    CInterruptController::GetInstance().Disable();
-   m = m_unTimerMilliseconds;
+   unMilliseconds = m_unTimerMilliseconds;
    CInterruptController::GetInstance().Enable();
-   return m;
+   return unMilliseconds;
 }
 
 /****************************************/

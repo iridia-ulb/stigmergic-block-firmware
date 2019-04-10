@@ -75,6 +75,7 @@ private:
 
    struct SRxDetector : CNFCController::SRxFunctor {     
       virtual void operator()(const uint8_t* pun_data, uint8_t un_length) {
+         fprintf(CFirmware::GetInstance().m_psOutputUART, "!\r\n");
          LastRxTime = CClock::GetInstance().GetMilliseconds();
       }
       uint32_t LastRxTime;

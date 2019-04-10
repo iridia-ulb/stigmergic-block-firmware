@@ -6,8 +6,8 @@
 #define PN532_STARTCODE1                    (0x00)
 #define PN532_STARTCODE2                    (0xFF)
 #define PN532_POSTAMBLE                     (0x00)
-#define PN532_ACKFRAME1                     (0x00) 
-#define PN532_ACKFRAME2                     (0xFF)
+#define PN532_ACKBYTE1                      (0x00)
+#define PN532_ACKBYTE2                      (0xFF)
 
 #define PN532_I2C_ADDRESS                   (0x48 >> 1)
 #define PN532_I2C_READBIT                   (0x01)
@@ -22,6 +22,8 @@
 
 #define PN532_HOSTTOPN532                   (0xD4)
 #define PN532_PN532TOHOST                   (0xD5)
+
+#define NFC_WATCHDOG_THRES                  200
 
 #include <stdint.h>
 
@@ -79,7 +81,9 @@ private:
 
    bool ReadResp();
 
-   void Write(ECommand e_command, const uint8_t* pun_data, uint8_t un_data_length);
+   void WriteAck();
+
+   void WriteCmd(ECommand e_command, const uint8_t* pun_data, uint8_t un_data_length);
 
 public:
 
@@ -90,6 +94,8 @@ public:
 
    ECommand m_eSelectedCommand;
    EState m_eState;
+
+   uint32_t m_unWatchdogTimer;
 
    /* shared data buffer for reading / writing commands */
    static uint8_t m_punTxRxBuffer[64];

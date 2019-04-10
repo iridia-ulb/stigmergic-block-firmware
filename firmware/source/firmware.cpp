@@ -187,8 +187,15 @@ int CFirmware::Exec() {
    /* Debug */
    CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CClock::GetInstance().Delay(10);
-   /* NFC controller power up */
+   /* Power cycle the faces */
    CPortController::GetInstance().Init();
+   for(SFace& sFace : m_psFaces) {
+      CPortController::GetInstance().DisablePort(sFace.Port);
+   }
+   for(SFace& sFace : m_psFaces) {
+      CPortController::GetInstance().EnablePort(sFace.Port);
+   }
+   /* Disable the TW controller during face detection */
    CTWController::GetInstance().Disable();
    /* detect faces */
    for(SFace& sFace : m_psFaces) {
@@ -226,33 +233,27 @@ int CFirmware::Exec() {
          Task::SetLEDModes(CLEDController::EMode::PWM);
          Task::SetLEDColors(0x00,0x00,0x00);
          /* Start initialization of NFC controllers */
+         sFace.NFC.SetTargetRxFunctor(&sFace.RxDetector);
+         sFace.NFC.SetInitiatorRxFunctor(&sFace.RxDetector);
          sFace.NFC.AppendEvent(CNFCController::EEvent::Init);
       }
    }
 
-   /* set the detectors */
-   for(SFace& sFace : m_psFaces) {
-      sFace.NFC.SetTargetRxFunctor(&sFace.RxDetector);
-      sFace.NFC.SetInitiatorRxFunctor(&sFace.RxDetector);
-   }
-
    /* begin infinite loop */
    for(;;) {
-      /* check for interrupts */
-      uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
       /* forward interrupts to faces */
       for(SFace& sFace : m_psFaces) {
          if(sFace.Connected) {
+            CPortController::GetInstance().SelectPort(sFace.Port);
+            /* check for interrupts */
+            uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
             if((unIRQs >> static_cast<uint8_t>(sFace.Port)) & 0x01) {
-               CPortController::GetInstance().SelectPort(sFace.Port);
                sFace.NFC.AppendEvent(CNFCController::EEvent::Interrupt);
                Debug(sFace);
-               /* recheck the interrupts */
-               unIRQs = CPortController::GetInstance().GetInterrupts();
             }
             else {
                /* with low probablity */
-               if(GetRandomNumber<uint8_t>(0,255) < 4) {
+               if(GetRandomNumber<uint8_t>(0,255) < 32) {
                   sFace.NFC.AppendEvent(CNFCController::EEvent::Transceive);
                   //Debug(sFace);
                }
@@ -263,7 +264,7 @@ int CFirmware::Exec() {
       uint8_t unActivatedFaceCount = 0;
       uint32_t unTime = CClock::GetInstance().GetMilliseconds();
       for(SFace& sFace : m_psFaces) {
-         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 500)) {
+         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 1000)) {
             unActivatedFaceCount++;
          }
       }
