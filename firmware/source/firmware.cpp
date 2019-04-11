@@ -168,7 +168,7 @@ void CFirmware::Reset() {
 
 void Log(const char* pch_message, bool b_bold = false) {
    uint32_t un_time = CClock::GetInstance().GetMilliseconds();
-   fprintf(CFirmware::GetInstance().m_psOutputUART, "[%05lu] \e[1m%s\e[0m\r\n", un_time, pch_message);
+   fprintf(CFirmware::GetInstance().m_psOutputUART, "[%05lu] %s%s\e[0m\r\n", un_time, (b_bold ? "\e[1m" : "") ,pch_message);
 }
 
 
@@ -216,15 +216,14 @@ int CFirmware::Exec() {
    /* Disconnect ports before running accelerometer init routine */
    CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CClock::GetInstance().Delay(10);
-   fprintf(m_psOutputUART, 
-           "[%05lu] Initialize MPU6050: %s\r\n", 
-           CClock::GetInstance().GetMilliseconds(), 
-           InitMPU6050() ? "success" : "failure");
+   Log("Initialize MPU6050");
+   InitMPU6050();
 
    /* Initialize faces */
    for(SFace& sFace : m_psFaces) {
       if(sFace.Connected) {
          CPortController::GetInstance().SelectPort(sFace.Port);
+         CClock::GetInstance().Delay(10);
          fprintf(m_psOutputUART, "[%05lu] Initialize %s face\r\n",
                  CClock::GetInstance().GetMilliseconds(),
                  GetPortString(sFace.Port));
@@ -235,9 +234,11 @@ int CFirmware::Exec() {
          /* Start initialization of NFC controllers */
          sFace.NFC.SetTargetRxFunctor(&sFace.RxDetector);
          sFace.NFC.SetInitiatorRxFunctor(&sFace.RxDetector);
-         sFace.NFC.AppendEvent(CNFCController::EEvent::Init);
+         sFace.NFC.Step(CNFCController::EEvent::Init);
       }
    }
+
+   uint32_t unLastDiag = CClock::GetInstance().GetMilliseconds();
 
    /* begin infinite loop */
    for(;;) {
@@ -245,18 +246,14 @@ int CFirmware::Exec() {
       for(SFace& sFace : m_psFaces) {
          if(sFace.Connected) {
             CPortController::GetInstance().SelectPort(sFace.Port);
+            CClock::GetInstance().Delay(10);
             /* check for interrupts */
             uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
             if((unIRQs >> static_cast<uint8_t>(sFace.Port)) & 0x01) {
-               sFace.NFC.AppendEvent(CNFCController::EEvent::Interrupt);
-               Debug(sFace);
+               sFace.NFC.Step(CNFCController::EEvent::Interrupt);
             }
             else {
-               /* with low probablity */
-               if(GetRandomNumber<uint8_t>(0,255) < 32) {
-                  sFace.NFC.AppendEvent(CNFCController::EEvent::Transceive);
-                  //Debug(sFace);
-               }
+               sFace.NFC.Step();
             }
          }
       }
@@ -264,7 +261,7 @@ int CFirmware::Exec() {
       uint8_t unActivatedFaceCount = 0;
       uint32_t unTime = CClock::GetInstance().GetMilliseconds();
       for(SFace& sFace : m_psFaces) {
-         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 1000)) {
+         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 750)) {
             unActivatedFaceCount++;
          }
       }
@@ -274,6 +271,16 @@ int CFirmware::Exec() {
             Task::SetLEDColors(unActivatedFaceCount == 1 ? 0x05 : 0x00,
                                unActivatedFaceCount == 2 ? 0x05 : 0x00,
                                unActivatedFaceCount == 3 ? 0x05 : 0x00);
+         }
+      }
+
+      if(unTime - unLastDiag > 5000) {
+         unLastDiag = unTime;
+         for(SFace& sFace : m_psFaces) {
+            if(sFace.Connected) {
+               fprintf(m_psOutputUART, "%s: %u\r\n", GetPortString(sFace.Port), sFace.RxDetector.Messages);
+               sFace.RxDetector.Messages = 0;
+            }
          }
       }
    }
@@ -288,9 +295,6 @@ void CFirmware::Debug(const SFace& s_face) {
    switch(s_face.NFC.m_eState) {
    case CNFCController::EState::Standby:
       fprintf(m_psOutputUART, "S:");
-      break;
-   case CNFCController::EState::Ready:
-      fprintf(m_psOutputUART, "R:");
       break;
    case CNFCController::EState::WaitingForAck:
       fprintf(m_psOutputUART, "WA:");

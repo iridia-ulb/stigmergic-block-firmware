@@ -75,10 +75,11 @@ private:
 
    struct SRxDetector : CNFCController::SRxFunctor {     
       virtual void operator()(const uint8_t* pun_data, uint8_t un_length) {
-         fprintf(CFirmware::GetInstance().m_psOutputUART, "!\r\n");
          LastRxTime = CClock::GetInstance().GetMilliseconds();
+         Messages++;
       }
-      uint32_t LastRxTime;
+      uint32_t LastRxTime = 0;
+      uint16_t Messages = 0;
    };
 
    struct SFace {
@@ -98,14 +99,6 @@ private:
    };
 
    void Debug(const SFace& s_face);
-
-   template<typename T>
-   T GetRandomNumber(int32_t n_min, int32_t n_max) {
-      static int32_t nValue = 
-         CADCController::GetInstance().Read(CADCController::EChannel::TEMP);
-      nValue = (nValue * 109 + 89);
-      return static_cast<T>(((nValue < 0 ? -nValue : nValue) % (n_max - n_min)) + n_min);
-   } 
 
 public: 
    /* TODO remove fprintf, stdio etc, replace with operator<< */

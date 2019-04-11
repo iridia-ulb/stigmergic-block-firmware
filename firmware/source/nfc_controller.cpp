@@ -6,6 +6,30 @@
 
 #include "nfc_controller.h"
 
+#define PN532_PREAMBLE                      (0x00)
+#define PN532_STARTCODE1                    (0x00)
+#define PN532_STARTCODE2                    (0xFF)
+#define PN532_POSTAMBLE                     (0x00)
+#define PN532_ACKBYTE1                      (0x00)
+#define PN532_ACKBYTE2                      (0xFF)
+
+#define PN532_I2C_ADDRESS                   (0x48 >> 1)
+#define PN532_I2C_READBIT                   (0x01)
+#define PN532_I2C_BUSY                      (0x00)
+#define PN532_I2C_READY                     (0x01)
+
+#define NFC_CMD_BUF_LEN                     64
+
+#define NFC_FRAME_DIRECTION_INDEX           5
+#define NFC_FRAME_ID_INDEX                  6
+#define NFC_FRAME_DATA_INDEX                7
+
+#define PN532_HOSTTOPN532                   (0xD4)
+#define PN532_PN532TOHOST                   (0xD5)
+
+#define NFC_DEFAULT_TIMEOUT                 600
+#define NFC_INITIATOR_TIMEOUT               200
+
 const uint8_t CNFCController::m_punFirmwareVersion[] = {
     0x32, /* IC:        PN532 */
     0x01, /* Version:   1 */
@@ -68,25 +92,15 @@ CNFCController::CNFCController() :
 /***********************************************************/
 /***********************************************************/
 
-bool CNFCController::AppendEvent(EEvent e_event) {
-   // TODO: create a small circular buffer for events?
-   // TODO: interrupts get passed through immediately (rx have priority over tx, i.e. EEvent::Transcieve)
-   return ProcessEvent(e_event);
-}
-
-/***********************************************************/
-/***********************************************************/
-
 #define TEXT_RED "\e[1;31m"
 #define TEXT_NORMAL "\e[0m"
 
 /* private: only accepts events if ready */
-bool CNFCController::ProcessEvent(EEvent e_event) {
+bool CNFCController::Step(EEvent e_event) {
    switch(m_eState) {
    case EState::Standby:
+      // if init event?
       WriteCmd(ECommand::GetFirmwareVersion, nullptr, 0);
-      break;
-   case EState::Ready:
       break;
    case EState::WaitingForAck:
       if(e_event == EEvent::Interrupt) {
@@ -103,7 +117,7 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
       if(e_event == EEvent::Interrupt) {
          if(!ReadResp()) {
             // resend packet
-            //WriteNack();
+            //WriteNack(); // rerun ECommand::TgInitAsTarget
          }
          else {
             switch(m_eSelectedCommand) {
@@ -160,8 +174,8 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
                   if(m_psInitiatorRxFunctor) {
                      (*m_psInitiatorRxFunctor)(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
                   }
-                  /* return to target mode */
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+                  /* continue to transmit as initiator again */
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
                }
                else {
                   fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "IDX:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
@@ -175,15 +189,32 @@ bool CNFCController::ProcessEvent(EEvent e_event) {
             } /* switch(m_eSelectedCommand) */
          } /* if response was valid */
       } /* if interrupt */
-      else if((m_unWatchdogTimer != 0) && (CClock::GetInstance().GetMilliseconds() - m_unWatchdogTimer > NFC_WATCHDOG_THRES)) {
-         /* cancel last command */
-         WriteAck();
-         /* try return to target mode or to execute InJumpForDEP */
-         if(m_eSelectedCommand == ECommand::TgInitAsTarget) {
-            WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
-         }
-         else {
-            WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+      else if(m_unWatchdogTimer != 0) {
+         uint32_t unTimer = CClock::GetInstance().GetMilliseconds() - m_unWatchdogTimer;
+         switch(m_eSelectedCommand) {
+         case ECommand::InJumpForDEP:
+            if(unTimer > NFC_INITIATOR_TIMEOUT) {
+               /* cancel command */
+               WriteAck();
+               /* go to target mode */
+               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+            }
+            break;
+         case ECommand::TgInitAsTarget:
+            if(unTimer > NFC_DEFAULT_TIMEOUT) {
+               /* cancel command */
+               WriteAck();
+               /* go to initiator mode */
+               WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+            }
+            break;
+         default:
+            if(unTimer > NFC_DEFAULT_TIMEOUT) {
+               /* cancel command */
+               WriteAck();
+               /* go to target mode */
+               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+            }
          }
       }
       break;
@@ -211,6 +242,8 @@ bool CNFCController::ReadAck() {
       (CTWController::GetInstance().Receive() == PN532_POSTAMBLE);
    CTWController::GetInstance().Receive(false);
    CTWController::GetInstance().Stop();
+   /* reset the watchdog timer */
+   m_unWatchdogTimer = CClock::GetInstance().GetMilliseconds();
    return bAcknowledged;
 }
 
@@ -220,7 +253,7 @@ bool CNFCController::ReadAck() {
 bool CNFCController::ReadResp() {
    CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS,
                                           CTWController::EMode::RECEIVE);
-   /* disable watchdog timer */
+   /* unset watchdog timer */
    m_unWatchdogTimer = 0;
    /* check the header */    
    if((CTWController::GetInstance().Receive() != PN532_I2C_READY)  ||
@@ -330,6 +363,7 @@ void CNFCController::WriteCmd(ECommand e_command, const uint8_t* pun_arguments, 
    /* update the state to waiting for acknowledgement */
    m_eSelectedCommand = e_command;
    m_eState = EState::WaitingForAck;
+   /* set watchdog timer */
    m_unWatchdogTimer = CClock::GetInstance().GetMilliseconds();
 }
 

@@ -2,29 +2,6 @@
 #ifndef NFC_CONTROLLER_H
 #define NFC_CONTROLLER_H
 
-#define PN532_PREAMBLE                      (0x00)
-#define PN532_STARTCODE1                    (0x00)
-#define PN532_STARTCODE2                    (0xFF)
-#define PN532_POSTAMBLE                     (0x00)
-#define PN532_ACKBYTE1                      (0x00)
-#define PN532_ACKBYTE2                      (0xFF)
-
-#define PN532_I2C_ADDRESS                   (0x48 >> 1)
-#define PN532_I2C_READBIT                   (0x01)
-#define PN532_I2C_BUSY                      (0x00)
-#define PN532_I2C_READY                     (0x01)
-
-#define NFC_CMD_BUF_LEN                     64
-
-#define NFC_FRAME_DIRECTION_INDEX           5
-#define NFC_FRAME_ID_INDEX                  6
-#define NFC_FRAME_DATA_INDEX                7
-
-#define PN532_HOSTTOPN532                   (0xD4)
-#define PN532_PN532TOHOST                   (0xD5)
-
-#define NFC_WATCHDOG_THRES                  200
-
 #include <stdint.h>
 
 class CNFCController {
@@ -50,10 +27,7 @@ public:
    /* constructor */
    CNFCController();
 
-   bool AppendEvent(EEvent e_event);
-
-   /* TODO make private: only accepts events if ready */
-   bool ProcessEvent(EEvent e_event);
+   bool Step(EEvent e_event = EEvent::None);
 
    EState GetState() const {
       return m_eState;
@@ -146,11 +120,11 @@ public:
    };
 
    enum class EEvent {
-      Init = 0, Interrupt, Transceive,
+      None = 0, Init, Interrupt,
    };
 
    enum class EState {
-      Standby = 0, Ready, WaitingForAck, WaitingForResp, Failed,
+      Standby = 0, WaitingForAck, WaitingForResp, Failed,
    };
 };
 
