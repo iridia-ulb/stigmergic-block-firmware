@@ -85,7 +85,7 @@ CNFCController::CNFCController() :
    m_psTargetRxFunctor(nullptr),
    m_psInitiatorTxFunctor(nullptr),
    m_psInitiatorRxFunctor(nullptr),
-   m_eSelectedCommand(ECommand::GetFirmwareVersion),
+   m_eSelectedCommand(ECommand::ConfigureSAM),
    m_eState(EState::Standby),
    m_unWatchdogTimer(0) {}
 
@@ -99,8 +99,9 @@ CNFCController::CNFCController() :
 bool CNFCController::Step(EEvent e_event) {
    switch(m_eState) {
    case EState::Standby:
-      // if init event?
-      WriteCmd(ECommand::GetFirmwareVersion, nullptr, 0);
+      if(e_event == EEvent::Init) {
+         WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
+      }
       break;
    case EState::WaitingForAck:
       if(e_event == EEvent::Interrupt) {
@@ -123,11 +124,6 @@ bool CNFCController::Step(EEvent e_event) {
          }
          else {
             switch(m_eSelectedCommand) {
-            case ECommand::GetFirmwareVersion:
-               if(true) { // TODO check firmware version
-                  WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
-               }
-               break;
             case ECommand::ConfigureSAM:
                WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
                break;
@@ -193,7 +189,7 @@ bool CNFCController::Step(EEvent e_event) {
    case EState::Failed:
       fprintf(CFirmware::GetInstance().m_psHUART, "Failure!\r\n");
       /* try to reset */
-      WriteCmd(ECommand::GetFirmwareVersion, nullptr, 0);
+      WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
       break;
    }
    return true;
