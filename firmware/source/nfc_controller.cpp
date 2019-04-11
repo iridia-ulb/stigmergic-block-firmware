@@ -92,11 +92,7 @@ CNFCController::CNFCController() :
 /***********************************************************/
 /***********************************************************/
 
-#define TEXT_RED "\e[1;31m"
-#define TEXT_NORMAL "\e[0m"
-
-/* private: only accepts events if ready */
-bool CNFCController::Step(EEvent e_event) {
+void CNFCController::Step(EEvent e_event) {
    switch(m_eState) {
    case EState::Standby:
       if(e_event == EEvent::Init) {
@@ -109,8 +105,10 @@ bool CNFCController::Step(EEvent e_event) {
             m_eState = EState::WaitingForResp;
          }
          else {
-            fprintf(CFirmware::GetInstance().m_psHUART, "NAck\r\n");
-            m_eState = EState::Failed;
+            /* cancel command */
+            WriteAck();
+            /* try to reinitialize */
+            WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
          }
       }
       break;
@@ -151,12 +149,13 @@ bool CNFCController::Step(EEvent e_event) {
                /* continue to transmit as initiator again */
                WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
                break;
-            default:
+            default: 
+               /* unimplemented command selected */
                m_eState = EState::Failed;
                break;
-            } /* switch(m_eSelectedCommand) */
-         } /* if response was valid */
-      } /* if interrupt */
+            }
+         }
+      }
       else if(m_unWatchdogTimer != 0) {
          uint32_t unTimer = CClock::GetInstance().GetMilliseconds() - m_unWatchdogTimer;
          switch(m_eSelectedCommand) {
@@ -187,12 +186,12 @@ bool CNFCController::Step(EEvent e_event) {
       }
       break;
    case EState::Failed:
-      fprintf(CFirmware::GetInstance().m_psHUART, "Failure!\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "Failure\r\n");
       /* try to reset */
       WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
       break;
    }
-   return true;
+   m_unLastStepTimestamp = CClock::GetInstance().GetMilliseconds();
 }
 
 /***********************************************************/

@@ -27,7 +27,11 @@ public:
    /* constructor */
    CNFCController();
 
-   bool Step(EEvent e_event = EEvent::None);
+   void Step(EEvent e_event = EEvent::None);
+
+   uint32_t GetLastStepTimestamp() const {
+      return m_unLastStepTimestamp;
+   }
 
    EState GetState() const {
       return m_eState;
@@ -70,6 +74,7 @@ public:
    EState m_eState;
 
    uint32_t m_unWatchdogTimer;
+   uint32_t m_unLastStepTimestamp;
 
    /* shared data buffer for reading / writing commands */
    static uint8_t m_punTxRxBuffer[64];

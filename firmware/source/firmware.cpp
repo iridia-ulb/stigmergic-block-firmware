@@ -242,46 +242,64 @@ int CFirmware::Exec() {
 
    /* begin infinite loop */
    for(;;) {
-      /* forward interrupts to faces */
+      /* select a face to update */
+      SFace* psSelectedFace = nullptr;
+      /* check interrupts */
+      uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
       for(SFace& sFace : m_psFaces) {
-         if(sFace.Connected) {
-            CPortController::GetInstance().SelectPort(sFace.Port);
-            CClock::GetInstance().Delay(10);
-            /* check for interrupts */
-            uint8_t unIRQs = CPortController::GetInstance().GetInterrupts();
-            if((unIRQs >> static_cast<uint8_t>(sFace.Port)) & 0x01) {
-               sFace.NFC.Step(CNFCController::EEvent::Interrupt);
-            }
-            else {
-               sFace.NFC.Step();
+         if(sFace.Connected && ((unIRQs >> static_cast<uint8_t>(sFace.Port)) & 0x01)) {
+            if(psSelectedFace == nullptr || 
+               sFace.NFC.GetLastStepTimestamp() < psSelectedFace->NFC.GetLastStepTimestamp()) {
+               psSelectedFace = &sFace;
             }
          }
       }
-
+      if(psSelectedFace != nullptr) {
+         CPortController::GetInstance().SelectPort(psSelectedFace->Port);
+         psSelectedFace->NFC.Step(CNFCController::EEvent::Interrupt);
+         /* restart the loop (interrupts have priority) */
+         continue;
+      }
+      else {
+         for(SFace& sFace : m_psFaces) {
+            if(sFace.Connected) {
+               if(psSelectedFace == nullptr || 
+                  sFace.NFC.GetLastStepTimestamp() < psSelectedFace->NFC.GetLastStepTimestamp()) {
+                  psSelectedFace = &sFace;
+               }
+            }
+         }
+         if(psSelectedFace != nullptr) {
+            CPortController::GetInstance().SelectPort(psSelectedFace->Port);
+            psSelectedFace->NFC.Step();
+         }
+      }
+      /* run user code */
       uint8_t unActivatedFaceCount = 0;
       uint32_t unTime = CClock::GetInstance().GetMilliseconds();
       for(SFace& sFace : m_psFaces) {
-         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 750)) {
+         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 500)) {
             unActivatedFaceCount++;
          }
       }
       for(SFace& sFace : m_psFaces) {
          if(sFace.Connected) {
             CPortController::GetInstance().SelectPort(sFace.Port);
-            Task::SetLEDColors(unActivatedFaceCount == 1 ? 0x05 : 0x00,
-                               unActivatedFaceCount == 2 ? 0x05 : 0x00,
-                               unActivatedFaceCount == 3 ? 0x05 : 0x00);
+            Task::SetLEDColors(unActivatedFaceCount == 1 ? 0x01 : 0x00,
+                               unActivatedFaceCount == 2 ? 0x01 : 0x00,
+                               unActivatedFaceCount == 3 ? 0x02 : 0x00);
          }
       }
 
-      if(unTime - unLastDiag > 5000) {
+      if(unTime - unLastDiag > 1000) {
          unLastDiag = unTime;
          for(SFace& sFace : m_psFaces) {
             if(sFace.Connected) {
-               fprintf(m_psOutputUART, "%s: %u\r\n", GetPortString(sFace.Port), sFace.RxDetector.Messages);
+               fprintf(m_psOutputUART, "%s:%2u ", GetPortString(sFace.Port), sFace.RxDetector.Messages);
                sFace.RxDetector.Messages = 0;
             }
          }
+         fprintf(m_psOutputUART, "\r\n");
       }
    }
    return 0;
