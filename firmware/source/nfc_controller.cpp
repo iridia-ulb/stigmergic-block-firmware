@@ -116,8 +116,10 @@ bool CNFCController::Step(EEvent e_event) {
    case EState::WaitingForResp:
       if(e_event == EEvent::Interrupt) {
          if(!ReadResp()) {
-            // resend packet
-            //WriteNack(); // rerun ECommand::TgInitAsTarget
+            /* cancel command */
+            WriteAck();
+            /* try return to target mode */
+            WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
          }
          else {
             switch(m_eSelectedCommand) {
@@ -132,56 +134,26 @@ bool CNFCController::Step(EEvent e_event) {
             case ECommand::TgInitAsTarget:
                WriteCmd(ECommand::TgGetData, nullptr, 0);
                break;
-            case ECommand::TgGetData:
-               if(m_punTxRxBuffer[0] == 0) {
-                  if(m_psTargetRxFunctor) {
-                     (*m_psTargetRxFunctor)(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
-                  }
-                  WriteCmd(ECommand::TgSetData, m_punTxRxBuffer, 
+            case ECommand::TgGetData:              
+               if(m_psTargetRxFunctor) {
+                  (*m_psTargetRxFunctor)(m_punTxRxBuffer, m_unTxRxLength);
+               }
+               WriteCmd(ECommand::TgSetData, m_punTxRxBuffer, 
                         m_psTargetTxFunctor ? (*m_psTargetTxFunctor)(m_punTxRxBuffer, sizeof m_punTxRxBuffer) : 0);
-               }
-               else {
-                  fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "TGD:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
-                  /* failure: try return to target mode */
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               }
                break;
             case ECommand::TgSetData:
-               if(m_punTxRxBuffer[0] == 0) {
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               }
-               else {
-                  fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "TSD:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
-                  /* failure: try return to target mode */
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               }
+               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
                break;
             case ECommand::InJumpForDEP:
-               if(m_punTxRxBuffer[0] == 0) {
-                  /* set the logical number of the target */
-                  m_punTxRxBuffer[0] = 1u;
-                  WriteCmd(ECommand::InDataExchange, m_punTxRxBuffer,
-                        m_psInitiatorTxFunctor ? (*m_psInitiatorTxFunctor)(m_punTxRxBuffer + 1, (sizeof m_punTxRxBuffer) - 1) + 1 : 1);
-               }
-               else {
-                  fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "DEP:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
-                  /* failure: try return to target mode */
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               }
+               WriteCmd(ECommand::InDataExchange, m_punTxRxBuffer,
+                        m_psInitiatorTxFunctor ? (*m_psInitiatorTxFunctor)(m_punTxRxBuffer, sizeof m_punTxRxBuffer) : 0);
                break;
             case ECommand::InDataExchange:
-               if(m_punTxRxBuffer[0] == 0) {
-                  if(m_psInitiatorRxFunctor) {
-                     (*m_psInitiatorRxFunctor)(m_punTxRxBuffer + 1, m_unTxRxLength - 1);
-                  }
-                  /* continue to transmit as initiator again */
-                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+               if(m_psInitiatorRxFunctor) {
+                  (*m_psInitiatorRxFunctor)(m_punTxRxBuffer, m_unTxRxLength);
                }
-               else {
-                  fprintf(CFirmware::GetInstance().m_psHUART, TEXT_RED "IDX:" TEXT_NORMAL " %02x\r\n", m_punTxRxBuffer[0]);
-                  /* failure: try return to target mode */
-                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               }
+               /* continue to transmit as initiator again */
+               WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
                break;
             default:
                m_eState = EState::Failed;
@@ -253,6 +225,12 @@ bool CNFCController::ReadAck() {
 bool CNFCController::ReadResp() {
    CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS,
                                           CTWController::EMode::RECEIVE);
+   /* check if the selected command has a status byte */
+   bool bHasStatusByte = 
+      (m_eSelectedCommand == ECommand::TgGetData)      ||
+      (m_eSelectedCommand == ECommand::TgSetData)      ||
+      (m_eSelectedCommand == ECommand::InDataExchange) ||
+      (m_eSelectedCommand == ECommand::InJumpForDEP);
    /* unset watchdog timer */
    m_unWatchdogTimer = 0;
    /* check the header */    
@@ -274,9 +252,9 @@ bool CNFCController::ReadResp() {
       CTWController::GetInstance().Stop();
       return false;
    }
-   /* store the number of returned bytes without the command byte and
-      the direction byte */
-   m_unTxRxLength = unPacketLength - 2u;
+   /* store the number of returned bytes without the command byte,
+      the direction byte, and if applicable the status byte */
+   m_unTxRxLength = unPacketLength - (bHasStatusByte ? 3u : 2u);
    /* prevent buffer overflow */
    if(m_unTxRxLength > sizeof m_punTxRxBuffer) {
       fprintf(CFirmware::GetInstance().m_psHUART, "E3\r\n");
@@ -301,6 +279,16 @@ bool CNFCController::ReadResp() {
    /* initialize checksum */
    uint8_t unChecksum = 
       PN532_PN532TOHOST + static_cast<uint8_t>(m_eSelectedCommand) + 1u;
+   /* read the status byte if applicable */
+   if(bHasStatusByte) {
+      uint8_t unStatusByte = CTWController::GetInstance().Receive();
+      unChecksum += unStatusByte;
+      if(unStatusByte != 0x00) {
+         fprintf(CFirmware::GetInstance().m_psHUART, "E6: 0x%02x\r\n", unStatusByte);
+         CTWController::GetInstance().Receive(false);
+         CTWController::GetInstance().Stop();
+      }
+   }
    /* transfer the data */
    for(uint8_t un_byte_index = 0;
        un_byte_index < m_unTxRxLength;
@@ -311,7 +299,7 @@ bool CNFCController::ReadResp() {
    /* validate the data checksum */
    unChecksum += CTWController::GetInstance().Receive();
    if(unChecksum != 0x00) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "E6\r\n");
+      fprintf(CFirmware::GetInstance().m_psHUART, "E7\r\n");
       CTWController::GetInstance().Receive(false);
       CTWController::GetInstance().Stop();
       return false;
@@ -337,20 +325,28 @@ void CNFCController::WriteAck() {
 /***********************************************************/
 
 void CNFCController::WriteCmd(ECommand e_command, const uint8_t* pun_arguments, uint8_t un_arguments_length) {
+   /* check if the selected command requires the target number */
+   bool bRequiresTarget = (e_command == ECommand::InDataExchange);
    /* start the transmission, send header */
    CTWController::GetInstance().StartWait(PN532_I2C_ADDRESS, CTWController::EMode::TRANSMIT);
    CTWController::GetInstance().Transmit(PN532_PREAMBLE);
    CTWController::GetInstance().Transmit(PN532_STARTCODE1);
    CTWController::GetInstance().Transmit(PN532_STARTCODE2);
+   /* the sent length is the sum of the argument bytes, the command byte, the direction byte,
+      and if applicable the target number */
+   uint8_t unDataLength = un_arguments_length + (bRequiresTarget ? 3u : 2u);
    /* send the length, direction, and command bytes */
-   /* the sent length is the sum of the direction byte, the command byte, and the argument bytes */
-   uint8_t unDataLength = 2u + un_arguments_length;
    CTWController::GetInstance().Transmit(unDataLength);
    CTWController::GetInstance().Transmit(~unDataLength + 1);
    CTWController::GetInstance().Transmit(PN532_HOSTTOPN532);
    CTWController::GetInstance().Transmit(static_cast<uint8_t>(e_command));
    /* initialize the checksum */
    uint8_t unChecksum = PN532_HOSTTOPN532 + static_cast<uint8_t>(e_command);
+   /* send the target number (always 1) if applicable */
+   if(bRequiresTarget) {
+      CTWController::GetInstance().Transmit(1u);
+      unChecksum += 1u;
+   }
    /* send pun_arguments */
    for(uint8_t un_index = 0; un_index < un_arguments_length; un_index++) {
       CTWController::GetInstance().Transmit(pun_arguments[un_index]);
