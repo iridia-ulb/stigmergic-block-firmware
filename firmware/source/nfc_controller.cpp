@@ -117,8 +117,14 @@ void CNFCController::Step(EEvent e_event) {
          if(!ReadResp()) {
             /* cancel command */
             WriteAck();
-            /* try return to target mode */
-            WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+            /* try to return to the previous mode */
+            if(m_eSelectedCommand == ECommand::InDataExchange ||
+               m_eSelectedCommand == ECommand::InJumpForDEP) {
+               WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+            }
+            else {
+               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+            }
          }
          else {
             switch(m_eSelectedCommand) {
@@ -282,6 +288,7 @@ bool CNFCController::ReadResp() {
          fprintf(CFirmware::GetInstance().m_psHUART, "E6: 0x%02x\r\n", unStatusByte);
          CTWController::GetInstance().Receive(false);
          CTWController::GetInstance().Stop();
+         return false;
       }
    }
    /* transfer the data */

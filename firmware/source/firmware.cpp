@@ -285,12 +285,13 @@ int CFirmware::Exec() {
       for(SFace& sFace : m_psFaces) {
          if(sFace.Connected) {
             CPortController::GetInstance().SelectPort(sFace.Port);
-            Task::SetLEDColors(unActivatedFaceCount == 1 ? 0x01 : 0x00,
-                               unActivatedFaceCount == 2 ? 0x01 : 0x00,
+            Task::SetLEDColors(unActivatedFaceCount == 1 || unActivatedFaceCount == 4 ? 0x01 : 0x00,
+                               unActivatedFaceCount == 2 || unActivatedFaceCount == 4 ? 0x01 : 0x00,
                                unActivatedFaceCount == 3 ? 0x02 : 0x00);
          }
       }
 
+      /* print diagnostics */
       if(unTime - unLastDiag > 1000) {
          unLastDiag = unTime;
          for(SFace& sFace : m_psFaces) {
@@ -300,6 +301,16 @@ int CFirmware::Exec() {
             }
          }
          fprintf(m_psOutputUART, "\r\n");
+      }
+      /* print extended diagnostics */
+      if(CHUARTController::GetInstance().HasData()) {
+         while(CHUARTController::GetInstance().HasData())
+            CHUARTController::GetInstance().Read();
+         for(SFace& sFace : m_psFaces) {
+            if(sFace.Connected) {
+               Debug(sFace);
+            }
+         }
       }
    }
    return 0;
