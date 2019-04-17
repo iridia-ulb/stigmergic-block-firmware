@@ -232,8 +232,11 @@ int CFirmware::Exec() {
          Task::SetLEDModes(CLEDController::EMode::PWM);
          Task::SetLEDColors(0x00,0x00,0x00);
          /* Start initialization of NFC controllers */
-         sFace.NFC.SetTargetRxFunctor(&sFace.RxDetector);
-         sFace.NFC.SetInitiatorRxFunctor(&sFace.RxDetector);
+         sFace.LastRxTime = 0;
+         sFace.RxAsTargetDetector.LastRxTime = &sFace.LastRxTime;
+         sFace.RxAsInitiatorDetector.LastRxTime = &sFace.LastRxTime;
+         sFace.NFC.SetTargetRxFunctor(&sFace.RxAsTargetDetector);
+         sFace.NFC.SetInitiatorRxFunctor(&sFace.RxAsInitiatorDetector);
          sFace.NFC.Step(CNFCController::EEvent::Init);
       }
    }
@@ -278,16 +281,38 @@ int CFirmware::Exec() {
       uint8_t unActivatedFaceCount = 0;
       uint32_t unTime = CClock::GetInstance().GetMilliseconds();
       for(SFace& sFace : m_psFaces) {
-         if(sFace.Connected && (unTime - sFace.RxDetector.LastRxTime < 500)) {
+         if(sFace.Connected && (unTime - sFace.LastRxTime < 500)) {
             unActivatedFaceCount++;
          }
       }
       for(SFace& sFace : m_psFaces) {
          if(sFace.Connected) {
             CPortController::GetInstance().SelectPort(sFace.Port);
-            Task::SetLEDColors(unActivatedFaceCount == 1 || unActivatedFaceCount == 4 ? 0x01 : 0x00,
-                               unActivatedFaceCount == 2 || unActivatedFaceCount == 4 ? 0x01 : 0x00,
-                               unActivatedFaceCount == 3 ? 0x02 : 0x00);
+            switch(unActivatedFaceCount) {
+            case 0:
+               Task::SetLEDColors(0,0,0);
+               break;
+/*
+            case 1:
+               Task::SetLEDColors(3,0,0);
+               break;
+            case 2:
+               Task::SetLEDColors(0,3,0);
+               break;
+            case 3:
+               Task::SetLEDColors(0,0,5);
+               break;
+            case 4:
+               Task::SetLEDColors(3,3,0);
+               break;
+            case 5:
+               Task::SetLEDColors(0,3,5);
+               break;
+*/
+            default:
+               Task::SetLEDColors(10,10,15);
+               break;
+            }
          }
       }
 
@@ -296,16 +321,19 @@ int CFirmware::Exec() {
          unLastDiag = unTime;
          for(SFace& sFace : m_psFaces) {
             if(sFace.Connected) {
-               fprintf(m_psOutputUART, "%s:%2u ", GetPortString(sFace.Port), sFace.RxDetector.Messages);
-               sFace.RxDetector.Messages = 0;
+               fprintf(m_psOutputUART, "%s:%2u/%-2u ", GetPortString(sFace.Port), sFace.RxAsInitiatorDetector.Messages, sFace.RxAsTargetDetector.Messages);
+               sFace.RxAsInitiatorDetector.Messages = 0;
+               sFace.RxAsTargetDetector.Messages = 0;
             }
          }
          fprintf(m_psOutputUART, "\r\n");
       }
       /* print extended diagnostics */
       if(CHUARTController::GetInstance().HasData()) {
+         /* flush */
          while(CHUARTController::GetInstance().HasData())
             CHUARTController::GetInstance().Read();
+         /* print */
          for(SFace& sFace : m_psFaces) {
             if(sFace.Connected) {
                Debug(sFace);
