@@ -4,10 +4,6 @@
 #include <stdint.h>
 #include <interrupt.h>
 
-#define EXT_INT0_SENSE_MASK        0x03
-#define EXT_INT0_FALLING_EDGE      0x02
-#define EXT_INT0_ENABLE            0x01
-
 #define PCA9554_RST_ADDR           0x20
 #define PCA9554_IRQ_ADDR           0x21
 

@@ -8,6 +8,7 @@
 
 #define NUM_FACES 6
 #define PORTC_TWCLK_MASK 0x20
+#define PORT_MUX_MASK 0x0F
 
 /***********************************************************/
 /***********************************************************/
@@ -15,7 +16,7 @@
 CPortController::CPortController() { 
 
    /* Configure the port TW multiplexer */
-   DDRC |= PORT_CTRL_MASK;
+   DDRC |= PORT_MUX_MASK;
 
    /* Disable all ports initially */
    /* Safe state, since selected a non-connected face results in stalling the I2C bus on R/W */
@@ -66,8 +67,10 @@ void CPortController::DisablePort(EPort e_target_port) {
 /***********************************************************/
 
 void CPortController::SelectPort(EPort e_target) {
-   PORTC &= ~PORT_CTRL_MASK;
-   PORTC |= static_cast<uint8_t>(e_target) & PORT_CTRL_MASK;
+   uint8_t unPortSelector = PORTC;
+   unPortSelector &= ~PORT_MUX_MASK;
+   unPortSelector |= static_cast<uint8_t>(e_target) & PORT_MUX_MASK;
+   PORTC = unPortSelector;
 }
 
 /***********************************************************/
