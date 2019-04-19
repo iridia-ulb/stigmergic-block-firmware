@@ -5,6 +5,10 @@
 #define HUART_RX_BUFFER_MASK ( HUART_RX_BUFFER_SIZE - 1)
 #define HUART_TX_BUFFER_MASK ( HUART_TX_BUFFER_SIZE - 1)
 
+/*
+https://github.com/virtualsquare/purelibc/blob/master/stdio.c#L245
+*/
+
 /***********************************************************/
 /***********************************************************/
 

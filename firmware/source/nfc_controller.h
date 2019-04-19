@@ -59,9 +59,11 @@ private:
 
    bool ReadResp();
 
-   void WriteAck();
+   bool WriteAck();
 
-   void WriteCmd(ECommand e_command, const uint8_t* pun_data, uint8_t un_data_length);
+   bool WriteCmd(ECommand e_command,
+                 const uint8_t* pun_arguments,
+                 uint8_t un_arguments_length);
 
 public:
 
@@ -80,10 +82,9 @@ public:
    static uint8_t m_punTxRxBuffer[64];
    static uint8_t m_unTxRxLength;
 
-   const static uint8_t m_punFirmwareVersion[4];
-
+   /* shared constants */
+   const static uint8_t m_punAckFrame[6];
    const static uint8_t m_punConfigureSAMArguments[3];
-
    const static uint8_t m_punTgInitAsTargetArguments[37];
    const static uint8_t m_punInJumpForDEPArguments[8];
 

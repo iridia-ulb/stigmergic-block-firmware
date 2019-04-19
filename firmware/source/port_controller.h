@@ -2,13 +2,6 @@
 #define PORT_CONTROLLER_H
 
 #include <stdint.h>
-#include <interrupt.h>
-
-#define PCA9554_RST_ADDR           0x20
-#define PCA9554_IRQ_ADDR           0x21
-
-#define NUM_PORTS 6
-
 
 class CPortController {
 
@@ -35,11 +28,13 @@ public:
    
    uint8_t GetInterrupts();
 
-   void EnablePort(EPort e_enable);
-   void DisablePort(EPort e_disable);
-   void SelectPort(EPort e_select);
+   bool EnablePort(EPort e_port);
 
-   bool IsPortConnected(EPort e_target);
+   bool DisablePort(EPort e_port);
+
+   void SelectPort(EPort e_port);
+
+   bool IsPortConnected(EPort e_port);
 
 private:
 

@@ -89,7 +89,7 @@ namespace Task {
          CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
                                  RGB_BLUE_OFFSET, e_mode);
          CLEDController::SetMode(unLedIdx * RGB_LEDS_PER_FACE +
-                                 RGB_UNUSED_OFFSET, CLEDController::EMode::OFF);
+                                 RGB_UNUSED_OFFSET, CLEDController::EMode::Off);
       }
    }
 }
@@ -116,12 +116,12 @@ enum class EMPU6050Register : uint8_t {
 
 bool CFirmware::InitMPU6050() {
    /* probe */
-   if(CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::WHOAMI) == MPU6050_ADDR) {
-      /* select internal clock, disable sleep/cycle mode, enable temperature sensor */
-      CTWController::GetInstance().Write(MPU6050_ADDR, EMPU6050Register::PWR_MGMT_1, 0x00);
-      return true;
-   }
-   else return false;
+   uint8_t unByte;
+   bool bStatus = CTWController::GetInstance().ReadRegister(MPU6050_ADDR, EMPU6050Register::WHOAMI, 1, &unByte);
+   bStatus = bStatus && (unByte == MPU6050_ADDR);
+   /* select internal clock, disable sleep/cycle mode, enable temperature sensor */
+   bStatus = bStatus && CTWController::GetInstance().WriteRegister(MPU6050_ADDR, EMPU6050Register::PWR_MGMT_1, 0x00);
+   return bStatus;
 }
 
 /***********************************************************/
@@ -130,7 +130,7 @@ bool CFirmware::InitMPU6050() {
 void CFirmware::TestAccelerometer() {
    /* buffer for holding accelerometer result */
    uint8_t punBuffer[8];
-   CTWController::GetInstance().Read(MPU6050_ADDR, EMPU6050Register::ACCEL_XOUT_H, 8, punBuffer);
+   CTWController::GetInstance().ReadRegister(MPU6050_ADDR, EMPU6050Register::ACCEL_XOUT_H, 8, punBuffer);
    fprintf(m_psOutputUART, 
            "X = %i\r\n"
            "Y = %i\r\n"
@@ -188,13 +188,8 @@ int CFirmware::Exec() {
    CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CClock::GetInstance().Delay(10);
    /* Power cycle the faces */
+   // TODO check CPortController::Init, move CTWController::GetInstance().Disable();
    CPortController::GetInstance().Init();
-   for(SFace& sFace : m_psFaces) {
-      CPortController::GetInstance().DisablePort(sFace.Port);
-   }
-   for(SFace& sFace : m_psFaces) {
-      CPortController::GetInstance().EnablePort(sFace.Port);
-   }
    /* Disable the TW controller during face detection */
    CTWController::GetInstance().Disable();
    /* detect faces */
@@ -237,7 +232,6 @@ int CFirmware::Exec() {
          sFace.RxAsInitiatorDetector.LastRxTime = &sFace.LastRxTime;
          sFace.NFC.SetTargetRxFunctor(&sFace.RxAsTargetDetector);
          sFace.NFC.SetInitiatorRxFunctor(&sFace.RxAsInitiatorDetector);
-         sFace.NFC.Step(CNFCController::EEvent::Init);
       }
    }
 
@@ -245,6 +239,24 @@ int CFirmware::Exec() {
 
    /* begin infinite loop */
    for(;;) {
+      /* check if any faces require a reset */
+      for(SFace& sFace : m_psFaces) {
+         if(sFace.NFC.GetState() == CNFCController::EState::Standby) {
+            fprintf(m_psOutputUART, "Reset %s\r\n", GetPortString(sFace.Port));
+            CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
+            CPortController::GetInstance().DisablePort(sFace.Port);
+            CClock::GetInstance().Delay(100);
+            CPortController::GetInstance().EnablePort(sFace.Port);
+         }
+      }
+      for(SFace& sFace : m_psFaces) {
+         if(sFace.NFC.GetState() == CNFCController::EState::Standby) {
+            fprintf(m_psOutputUART, "Initialize %s\r\n", GetPortString(sFace.Port));
+            CPortController::GetInstance().SelectPort(sFace.Port);
+            sFace.NFC.Step(CNFCController::EEvent::Init);
+         }
+      }
+
       /* select a face to update */
       SFace* psSelectedFace = nullptr;
       /* check interrupts */
@@ -260,7 +272,7 @@ int CFirmware::Exec() {
       if(psSelectedFace != nullptr) {
          CPortController::GetInstance().SelectPort(psSelectedFace->Port);
          psSelectedFace->NFC.Step(CNFCController::EEvent::Interrupt);
-         /* restart the loop (interrupts have priority) */
+         /* restart the loop (interrupts always have priority) */
          continue;
       }
       else {
@@ -336,9 +348,12 @@ int CFirmware::Exec() {
          /* print */
          for(SFace& sFace : m_psFaces) {
             if(sFace.Connected) {
+               CPortController::GetInstance().SelectPort(sFace.Port);
+               Task::SetLEDColors(0,0,15);
                Debug(sFace);
             }
          }
+         CClock::GetInstance().Delay(100);
       }
    }
    return 0;

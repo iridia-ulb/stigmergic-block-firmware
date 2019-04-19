@@ -1,5 +1,7 @@
 #include "tw_controller.h"
 
+#include "huart_controller.h"
+
 #include <avr/io.h>
 #include <util/twi.h>
 
@@ -34,15 +36,21 @@ bool CTWController::Start(uint8_t un_device, EMode e_mode) {
    /* send START condition */
    TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
    /* wait until transmission completed */
-   Wait();
+   if(!Wait()) {
+      return false;
+   }
    /* check value of TWI Status Register */
    uint8_t unStatus = TW_STATUS;
-   if ( (unStatus != TW_START) && (unStatus != TW_REP_START)) return false;
+   if((unStatus != TW_START) && (unStatus != TW_REP_START)) {
+      return false;
+   }
    /* send device address */
    TWDR = (un_device << 1) | static_cast<uint8_t>(e_mode);
    TWCR = (1 << TWINT) | (1 << TWEN);
    /* wait until transmission completed and ACK/NACK has been received */
-   Wait();
+   if(!Wait()) {
+      return false;
+   }
    /* check value of TWI Status Register */
    unStatus = TW_STATUS;
    return ((unStatus == TW_MT_SLA_ACK) || (unStatus == TW_MR_SLA_ACK));
@@ -51,12 +59,14 @@ bool CTWController::Start(uint8_t un_device, EMode e_mode) {
 /****************************************/
 /****************************************/
 
-void CTWController::StartWait(uint8_t un_device, EMode e_mode) {
+bool CTWController::StartWait(uint8_t un_device, EMode e_mode) {
    for(;;) {
       /* send START condition */
       TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
       /* wait until transmission completed */
-      Wait();
+      if(!Wait()) {
+         return false;
+      }
       /* check value of TWI Status Register */
       uint8_t unStatus = TW_STATUS;
       if ( (unStatus != TW_START) && (unStatus != TW_REP_START)) continue;
@@ -64,28 +74,47 @@ void CTWController::StartWait(uint8_t un_device, EMode e_mode) {
       TWDR = (un_device << 1) | static_cast<uint8_t>(e_mode);
       TWCR = (1 << TWINT) | (1 << TWEN);
       /* wail until transmission completed */
-      Wait();
+      if(!Wait()) {
+         return false;
+      }
       /* check value of TWI Status Register */
       unStatus = TW_STATUS;
       if((unStatus == TW_MT_SLA_NACK) || (unStatus == TW_MR_DATA_NACK)) {    	    
          /* device busy, send stop condition to terminate write operation */
-         TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWSTO);
-         /* wait until stop condition is executed and bus released */
-         while(TWCR & (1 << TWSTO));
-         continue;
+         if(Stop()) {
+            continue;
+         }
+         else {
+            return false;
+         }
       }
       else break;
    }
+   return true;
 }
 
 /****************************************/
 /****************************************/
 
-void CTWController::Stop() {
+bool CTWController::Stop() {
    /* send stop condition */
    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWSTO);
-   /* wait until stop condition is executed and bus released */
-   while(TWCR & (1 << TWSTO));
+   /* wait until stop condition is executed and the bus is released */
+   uint16_t unWatchdog = UINT16_MAX;
+   while(TWCR & (1 << TWSTO)) {
+      unWatchdog--;
+      if(unWatchdog == 0) {
+         /* disable controller */
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('\r');
+         CHUARTController::GetInstance().Write('\n');
+         TWCR = 0;
+         return false;
+      }
+   }
+   return true;
 }
 
 /****************************************/
@@ -96,28 +125,47 @@ bool CTWController::Transmit(uint8_t un_data) {
    TWDR = un_data;
    TWCR = (1 << TWINT) | (1 << TWEN);
    /* wait until transmission completed */
-   Wait();
+   if(!Wait()) {
+      return false;
+   }
    return (TW_STATUS == TW_MT_DATA_ACK);
 }
 
 /****************************************/
 /****************************************/
 
-uint8_t CTWController::Receive(bool b_continue) {
+bool CTWController::Receive(uint8_t* pun_byte, bool b_continue) {
    TWCR = (1 << TWINT) |
           (1 << TWEN)  |  
           (b_continue ? (1 << TWEA) : 0);
    /* wait until done */
-   Wait();
+   if(!Wait()) {
+      return false;
+   }
    /* return received byte */
-   return TWDR;
+   *pun_byte = TWDR;
+   return true;
 }
 
 /****************************************/
 /****************************************/
 
-void CTWController::Wait() {
-   while(!(TWCR & (1 << TWINT)));
+bool CTWController::Wait() {
+   uint16_t unWatchdog = UINT16_MAX;
+   while(!(TWCR & (1 << TWINT))) {
+      unWatchdog--;
+      if(unWatchdog == 0) {
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('X');
+         CHUARTController::GetInstance().Write('\r');
+         CHUARTController::GetInstance().Write('\n');
+         /* disable controller */
+         TWCR = 0;
+         return false;
+      }
+   }
+   return true;
 }
 
 /****************************************/

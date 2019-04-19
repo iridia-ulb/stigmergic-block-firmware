@@ -7,21 +7,23 @@ class CLEDController {
 public:
 
    enum class EMode : uint8_t {
-      OFF  = 0x00,
-      ON   = 0x01,
+      Off  = 0x00,
+      On   = 0x01,
       PWM  = 0x02,
-      BLINK = 0x03,
+      Blink = 0x03,
    };
 
-   static void Init();
+   static bool Init();
 
-   static void SetMode(uint8_t un_led, EMode e_mode);
+   static bool SetMode(uint8_t un_led, EMode e_mode);
 
-   static void SetBrightness(uint8_t un_led, uint8_t un_val);
+   static bool SetBrightness(uint8_t un_led, uint8_t un_val);
 
-   static void SetBlinkRate(uint8_t un_period, uint8_t un_duty_cycle);
+   static bool SetBlinkRate(uint8_t un_period, uint8_t un_duty_cycle);
 
 private:
+
+   const static uint8_t m_punResetSequence[2];
 
    enum class ERegister : uint8_t {
       MODE1          = 0x00,
