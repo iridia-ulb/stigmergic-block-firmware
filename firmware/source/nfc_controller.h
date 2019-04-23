@@ -130,7 +130,7 @@ public:
    };
 
    enum class EState {
-      Standby = 0, WaitingForAck, WaitingForResp, Failed,
+      Standby = 0, WaitingForAck, WaitingForResp,
    };
 };
 

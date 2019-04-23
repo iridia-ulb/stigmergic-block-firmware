@@ -1,16 +1,9 @@
 #ifndef FIRMWARE_H
 #define FIRMWARE_H
 
-//#define DEBUG
-
 /* AVR Headers */
 #include <avr/io.h>
 #include <avr/interrupt.h>
-
-/* debug */
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 
 /* Firmware Headers */
 #include <huart_controller.h>
@@ -39,13 +32,7 @@ public:
       return cInstance;
    }
 
-   void SetFilePointers(FILE* ps_huart, FILE* ps_tuart) {
-      m_psHUART = ps_huart;
-      m_psTUART = ps_tuart;
-      m_psOutputUART = ps_huart;
-   }
-
-   int Exec();
+   int Execute();
       
 private:
 
@@ -101,12 +88,6 @@ private:
    };
 
    void Debug(const SFace& s_face);
-
-public: 
-   /* TODO remove fprintf, stdio etc, replace with operator<< */
-   FILE* m_psTUART;
-   FILE* m_psHUART;
-   FILE* m_psOutputUART;
 
 };
 

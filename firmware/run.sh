@@ -26,6 +26,7 @@ done
 tmux select-window -t blocks:0
 tmux select-pane -t 0
 tmux select-layout -t blocks even-horizontal
+tmux set -g mouse on
 
 # key bindings
 tmux unbind-key C-c

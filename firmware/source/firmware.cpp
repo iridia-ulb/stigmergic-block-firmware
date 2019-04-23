@@ -6,25 +6,8 @@ int main(void)
    /* Configure the BQ24075 monitoring pins */
    DDRD &= ~PWR_MON_MASK;  // set as input
    PORTD &= ~PWR_MON_MASK; // disable pull ups
-
-   /* FILE structs for fprintf */
-   FILE tuart, huart;
-
-   /* Set up FILE structs for fprintf */                           
-   fdev_setup_stream(&huart, 
-                     [](char c_to_write, FILE* pf_stream) {
-                        CHUARTController::GetInstance().Write(c_to_write);
-                        return 1;
-                     },
-                     [](FILE* pf_stream) {
-                        return static_cast<int>(CHUARTController::GetInstance().Read());
-                     },
-                     _FDEV_SETUP_RW);
-
-   CFirmware::GetInstance().SetFilePointers(&huart, &tuart);
-
    /* Execute the firmware */
-   return CFirmware::GetInstance().Exec();
+   return CFirmware::GetInstance().Execute();
 }
 
 /***********************************************************/
@@ -131,25 +114,20 @@ void CFirmware::TestAccelerometer() {
    /* buffer for holding accelerometer result */
    uint8_t punBuffer[8];
    CTWController::GetInstance().ReadRegister(MPU6050_ADDR, EMPU6050Register::ACCEL_XOUT_H, 8, punBuffer);
-   fprintf(m_psOutputUART, 
-           "X = %i\r\n"
-           "Y = %i\r\n"
-           "Z = %i\r\n"
-           "T = %i\r\n",
-           int16_t((punBuffer[0] << 8) | punBuffer[1]),
-           int16_t((punBuffer[2] << 8) | punBuffer[3]),
-           int16_t((punBuffer[4] << 8) | punBuffer[5]),
-           (int16_t((punBuffer[6] << 8) | punBuffer[7]) + 12412) / 340);
+   CHUARTController::GetInstance().Print("[X, Y, Z] = [%5i %5i %5i]",
+     int16_t((punBuffer[0] << 8) | punBuffer[1]),
+     int16_t((punBuffer[2] << 8) | punBuffer[3]),
+     int16_t((punBuffer[4] << 8) | punBuffer[5]),
+     (int16_t((punBuffer[6] << 8) | punBuffer[7]) + 12412) / 340);
 }
 
 /***********************************************************/
 /***********************************************************/
 
 void CFirmware::TestPMIC() {
-   fprintf(m_psOutputUART,
-           "Powered = %c\r\nCharging = %c\r\n",
-           (PIND & PWR_MON_PGOOD)?'F':'T',
-           (PIND & PWR_MON_CHG)?'F':'T');
+   CHUARTController::GetInstance().Print("Powered = %c\r\nCharging = %c\r\n",
+     (PIND & PWR_MON_PGOOD)?'F':'T',
+     (PIND & PWR_MON_CHG)?'F':'T');
 }
 
 /***********************************************************/
@@ -168,21 +146,21 @@ void CFirmware::Reset() {
 
 void Log(const char* pch_message, bool b_bold = false) {
    uint32_t un_time = CClock::GetInstance().GetMilliseconds();
-   fprintf(CFirmware::GetInstance().m_psOutputUART, "[%05lu] %s%s\e[0m\r\n", un_time, (b_bold ? "\e[1m" : "") ,pch_message);
+   CHUARTController::GetInstance().Print("[%05lu] %s%s\e[0m\r\n", un_time, (b_bold ? "\e[1m" : ""), pch_message);
 }
 
 
 /***********************************************************/
 /***********************************************************/
 
-int CFirmware::Exec() {
+int CFirmware::Execute() {
    /* Enable interrupts */
    CInterruptController::GetInstance().Enable();
    /* Begin Init */
    Log("Stigmergic Block Initialization", true);
 
    /* Configure port controller, detect ports */
-   fprintf(m_psOutputUART, "[%05lu] Detecting ports\r\n", CClock::GetInstance().GetMilliseconds());
+   CHUARTController::GetInstance().Print("[%05lu] Detecting ports\r\n", CClock::GetInstance().GetMilliseconds());
 
    /* Debug */
    CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
@@ -199,13 +177,13 @@ int CFirmware::Exec() {
    CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
    CTWController::GetInstance().Enable();
 
-   fprintf(m_psOutputUART, "[%05lu] Connected faces: ", CClock::GetInstance().GetMilliseconds());
+   CHUARTController::GetInstance().Print("[%05lu] Connected faces: ", CClock::GetInstance().GetMilliseconds());
    for(SFace& sFace : m_psFaces) {
       if(sFace.Connected) {
-         fprintf(m_psOutputUART, "%s ", GetPortString(sFace.Port));
+         CHUARTController::GetInstance().Print("%s ", GetPortString(sFace.Port));
       }
    }
-   fprintf(m_psOutputUART, "\r\n");
+   CHUARTController::GetInstance().Print("\r\n");
 
    /* Configure accelerometer */
    /* Disconnect ports before running accelerometer init routine */
@@ -219,7 +197,7 @@ int CFirmware::Exec() {
       if(sFace.Connected) {
          CPortController::GetInstance().SelectPort(sFace.Port);
          CClock::GetInstance().Delay(10);
-         fprintf(m_psOutputUART, "[%05lu] Initialize %s face\r\n",
+         CHUARTController::GetInstance().Print("[%05lu] Initialize %s face\r\n",
                  CClock::GetInstance().GetMilliseconds(),
                  GetPortString(sFace.Port));
          /* Initialize LEDs */
@@ -242,7 +220,7 @@ int CFirmware::Exec() {
       /* check if any faces require a reset */
       for(SFace& sFace : m_psFaces) {
          if(sFace.NFC.GetState() == CNFCController::EState::Standby) {
-            fprintf(m_psOutputUART, "Reset %s\r\n", GetPortString(sFace.Port));
+            CHUARTController::GetInstance().Print("Reset %s\r\n", GetPortString(sFace.Port));
             CPortController::GetInstance().SelectPort(CPortController::EPort::NULLPORT);
             CPortController::GetInstance().DisablePort(sFace.Port);
             CClock::GetInstance().Delay(100);
@@ -251,7 +229,7 @@ int CFirmware::Exec() {
       }
       for(SFace& sFace : m_psFaces) {
          if(sFace.NFC.GetState() == CNFCController::EState::Standby) {
-            fprintf(m_psOutputUART, "Initialize %s\r\n", GetPortString(sFace.Port));
+            CHUARTController::GetInstance().Print("Initialize %s\r\n", GetPortString(sFace.Port));
             CPortController::GetInstance().SelectPort(sFace.Port);
             sFace.NFC.Step(CNFCController::EEvent::Init);
          }
@@ -333,12 +311,12 @@ int CFirmware::Exec() {
          unLastDiag = unTime;
          for(SFace& sFace : m_psFaces) {
             if(sFace.Connected) {
-               fprintf(m_psOutputUART, "%s:%2u/%-2u ", GetPortString(sFace.Port), sFace.RxAsInitiatorDetector.Messages, sFace.RxAsTargetDetector.Messages);
+               CHUARTController::GetInstance().Print("%s:%2u/%-2u ", GetPortString(sFace.Port), sFace.RxAsInitiatorDetector.Messages, sFace.RxAsTargetDetector.Messages);
                sFace.RxAsInitiatorDetector.Messages = 0;
                sFace.RxAsTargetDetector.Messages = 0;
             }
          }
-         fprintf(m_psOutputUART, "\r\n");
+         CHUARTController::GetInstance().Print("\r\n");
       }
       /* print extended diagnostics */
       if(CHUARTController::GetInstance().HasData()) {
@@ -363,48 +341,45 @@ int CFirmware::Exec() {
 /***********************************************************/
 
 void CFirmware::Debug(const SFace& s_face) {
-   fprintf(m_psOutputUART, "%s:", GetPortString(s_face.Port));
+   CHUARTController::GetInstance().Print("%s:", GetPortString(s_face.Port));
    switch(s_face.NFC.m_eState) {
    case CNFCController::EState::Standby:
-      fprintf(m_psOutputUART, "S:");
+      CHUARTController::GetInstance().Print("S:");
       break;
    case CNFCController::EState::WaitingForAck:
-      fprintf(m_psOutputUART, "WA:");
+      CHUARTController::GetInstance().Print("WA:");
       break;
    case CNFCController::EState::WaitingForResp:
-      fprintf(m_psOutputUART, "WR:");
-      break;
-   case CNFCController::EState::Failed:
-      fprintf(m_psOutputUART, "F:");
+      CHUARTController::GetInstance().Print("WR:");
       break;
    }
    switch(s_face.NFC.m_eSelectedCommand) {
    case CNFCController::ECommand::GetFirmwareVersion:
-      fprintf(m_psOutputUART, "GFV:");
+      CHUARTController::GetInstance().Print("GFV:");
       break;
    case CNFCController::ECommand::ConfigureSAM:
-      fprintf(m_psOutputUART, "CSAM:");
+      CHUARTController::GetInstance().Print("CSAM:");
       break;
    case CNFCController::ECommand::InJumpForDEP:
-      fprintf(m_psOutputUART, "IJFD:");
+      CHUARTController::GetInstance().Print("IJFD:");
       break;
    case CNFCController::ECommand::InDataExchange:
-      fprintf(m_psOutputUART, "IDE:");
+      CHUARTController::GetInstance().Print("IDE:");
       break;
    case CNFCController::ECommand::TgInitAsTarget:
-      fprintf(m_psOutputUART, "IAT:");
+      CHUARTController::GetInstance().Print("IAT:");
       break;
    case CNFCController::ECommand::TgGetData:
-      fprintf(m_psOutputUART, "TGD:");
+      CHUARTController::GetInstance().Print("TGD:");
       break;
    case CNFCController::ECommand::TgSetData:
-      fprintf(m_psOutputUART, "TSD:");
+      CHUARTController::GetInstance().Print("TSD:");
       break;
    default:
-      fprintf(m_psOutputUART, "0x%02x", static_cast<uint8_t>(s_face.NFC.m_eSelectedCommand));
+      CHUARTController::GetInstance().Print("0x%02x", static_cast<uint8_t>(s_face.NFC.m_eSelectedCommand));
       break;
    }
-   fprintf(m_psOutputUART, "\r\n");
+   CHUARTController::GetInstance().Print("\r\n");
 }
 
 

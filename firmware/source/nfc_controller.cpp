@@ -242,7 +242,7 @@ bool CNFCController::ReadResp() {
    bStatus = bStatus && CTWController::GetInstance().Receive(&unReceivedByte);
    bStatus = bStatus && (unReceivedByte == PN532_STARTCODE2);
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R1\r\n");
+      CHUARTController::GetInstance().Print("R1\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
       return false;
@@ -254,7 +254,7 @@ bool CNFCController::ReadResp() {
    bStatus = bStatus && CTWController::GetInstance().Receive(&unPacketLengthChecksum);
    bStatus = bStatus && ((unPacketLength + unPacketLengthChecksum) & 0xFF) == 0u;
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R2\r\n");
+      CHUARTController::GetInstance().Print("R2\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
       return false;
@@ -264,7 +264,7 @@ bool CNFCController::ReadResp() {
    m_unTxRxLength = unPacketLength - (bHasStatusByte ? 3u : 2u);
    /* prevent buffer overflow */
    if(m_unTxRxLength > sizeof m_punTxRxBuffer) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R3\r\n");
+      CHUARTController::GetInstance().Print("R3\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
       return false;
@@ -273,7 +273,7 @@ bool CNFCController::ReadResp() {
    bStatus = bStatus && CTWController::GetInstance().Receive(&unReceivedByte);
    bStatus = bStatus && (unReceivedByte == PN532_PN532TOHOST);
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R4\r\n");
+      CHUARTController::GetInstance().Print("R4\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
       return false;
@@ -282,7 +282,7 @@ bool CNFCController::ReadResp() {
    bStatus = bStatus && CTWController::GetInstance().Receive(&unReceivedByte);
    bStatus = bStatus && (unReceivedByte == static_cast<uint8_t>(m_eSelectedCommand) + 1u);
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R5\r\n");
+      CHUARTController::GetInstance().Print("R5\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
       return false;
@@ -296,7 +296,7 @@ bool CNFCController::ReadResp() {
       bStatus = bStatus && CTWController::GetInstance().Receive(&unStatusByte);
       bStatus = bStatus && (unStatusByte == 0x00);
       if(!bStatus) {
-         fprintf(CFirmware::GetInstance().m_psHUART, "R6: 0x%02x\r\n", unStatusByte);
+         CHUARTController::GetInstance().Print("R6: 0x%02x\r\n", unStatusByte);
          CTWController::GetInstance().Receive(&unReceivedByte, false);
          CTWController::GetInstance().Stop();
          return false;
@@ -309,7 +309,7 @@ bool CNFCController::ReadResp() {
       unChecksum += m_punTxRxBuffer[un_byte_index];
    }
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R7\r\n");
+      CHUARTController::GetInstance().Print("R7\r\n");
       CTWController::GetInstance().Receive(&unReceivedByte, false);
       CTWController::GetInstance().Stop();
    }
@@ -318,7 +318,7 @@ bool CNFCController::ReadResp() {
    unChecksum += unReceivedByte;
    bStatus = bStatus && (unChecksum == 0x00);
    if(!bStatus) {
-      fprintf(CFirmware::GetInstance().m_psHUART, "R8\r\n");
+      CHUARTController::GetInstance().Print("R8\r\n");
    }
    CTWController::GetInstance().Receive(&unReceivedByte, false);
    CTWController::GetInstance().Stop();

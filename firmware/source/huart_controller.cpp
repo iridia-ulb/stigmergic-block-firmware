@@ -5,10 +5,6 @@
 #define HUART_RX_BUFFER_MASK ( HUART_RX_BUFFER_SIZE - 1)
 #define HUART_TX_BUFFER_MASK ( HUART_TX_BUFFER_SIZE - 1)
 
-/*
-https://github.com/virtualsquare/purelibc/blob/master/stdio.c#L245
-*/
-
 /***********************************************************/
 /***********************************************************/
 
@@ -130,4 +126,19 @@ void CHUARTController::CTransmitInterrupt::Write(uint8_t un_data) {
 
 /***********************************************************/
 /***********************************************************/
+
+#include <stdio.h>
+
+void CHUARTController::Print(const char* pch_format, ...) {
+   /* set up the output (once) */
+   static FILE* psOutput = fdevopen([] (char c_to_write, FILE* pf_stream) {
+      CHUARTController::GetInstance().Write(c_to_write);
+      return 0;
+   }, nullptr);
+   /* print */
+	va_list tArguments;
+	va_start(tArguments, pch_format);
+   vfprintf(psOutput, pch_format, tArguments);
+	va_end(tArguments);
+}
 

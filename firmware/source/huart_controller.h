@@ -30,6 +30,8 @@ public:
       m_cTransmitInterrupt.Write(data);
    }
 
+   void Print(const char* pch_format, ...);
+
 private:
 
    CHUARTController();
