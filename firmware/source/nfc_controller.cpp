@@ -1,7 +1,4 @@
 
-//TODO remove this
-#include <firmware.h>
-
 #include <clock.h>
 
 #include "nfc_controller.h"
@@ -87,19 +84,24 @@ CNFCController::CNFCController() :
    m_psTargetRxFunctor(nullptr),
    m_psInitiatorTxFunctor(nullptr),
    m_psInitiatorRxFunctor(nullptr),
+   m_eInitiatorPolicy(EInitiatorPolicy::Disabled),
    m_eSelectedCommand(ECommand::ConfigureSAM),
    m_eState(EState::Standby),
-   m_unWatchdogTimer(0) {}
+   m_unWatchdogTimer(0u) {}
 
 /***********************************************************/
 /***********************************************************/
 
-void CNFCController::Step(EEvent e_event) {
+bool CNFCController::Step(EEvent e_event) {
+   /* execute the finite state machine */
    switch(m_eState) {
+   /* TODO:
+      1. Clean up the failure logic for EState::Standby, EState::WaitingForAck, EState::WaitingForResp
+      2. Return false from this method to indicate unrecoverable errors (reset required)
+      3. Implement a StartCommandSeq method to reduce code duplication?
+   */
    case EState::Standby:
-      if(e_event == EEvent::Init) {
-         WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
-      }
+      WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
       break;
    case EState::WaitingForAck:
       if(e_event == EEvent::Interrupt) {
@@ -136,7 +138,20 @@ void CNFCController::Step(EEvent e_event) {
          else {
             switch(m_eSelectedCommand) {
             case ECommand::ConfigureSAM:
-               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+               /* execute the next command depending on the initiator policy */
+               switch(m_eInitiatorPolicy) {
+               case EInitiatorPolicy::Continuous:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  break;
+               case EInitiatorPolicy::Once:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  /* change policy to disable */
+                  m_eInitiatorPolicy = EInitiatorPolicy::Disable;
+                  break;
+               case EInitiatorPolicy::Disable:
+                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+                  break;
+               }
                break;
             case ECommand::TgInitAsTarget:
                WriteCmd(ECommand::TgGetData, nullptr, 0);
@@ -149,7 +164,20 @@ void CNFCController::Step(EEvent e_event) {
                         m_psTargetTxFunctor ? (*m_psTargetTxFunctor)(m_punTxRxBuffer, sizeof m_punTxRxBuffer) : 0);
                break;
             case ECommand::TgSetData:
-               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+               /* execute the next command depending on the initiator policy */
+               switch(m_eInitiatorPolicy) {
+               case EInitiatorPolicy::Continuous:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  break;
+               case EInitiatorPolicy::Once:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  /* change policy to disable */
+                  m_eInitiatorPolicy = EInitiatorPolicy::Disable;
+                  break;
+               case EInitiatorPolicy::Disable:
+                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+                  break;
+               }
                break;
             case ECommand::InJumpForDEP:
                WriteCmd(ECommand::InDataExchange, m_punTxRxBuffer,
@@ -159,47 +187,60 @@ void CNFCController::Step(EEvent e_event) {
                if(m_psInitiatorRxFunctor) {
                   (*m_psInitiatorRxFunctor)(m_punTxRxBuffer, m_unTxRxLength);
                }
-               /* continue to transmit as initiator again */
-               WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
-               break;
-            default: 
-               /* unimplemented command selected */
-               m_eState = EState::Standby;
+               /* execute the next command depending on the initiator policy */
+               switch(m_eInitiatorPolicy) {
+               case EInitiatorPolicy::Continuous:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  break;
+               case EInitiatorPolicy::Once:
+                  WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+                  /* change policy to disable */
+                  m_eInitiatorPolicy = EInitiatorPolicy::Disable;
+                  break;
+               case EInitiatorPolicy::Disable:
+                  WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+                  break;
+               }
                break;
             }
          }
       }
       else if(m_unWatchdogTimer != 0) {
          uint32_t unTimer = CClock::GetInstance().GetMilliseconds() - m_unWatchdogTimer;
-         switch(m_eSelectedCommand) {
-         case ECommand::InJumpForDEP:
-            if(unTimer > NFC_INITIATOR_TIMEOUT) {
-               /* cancel command */
-               WriteAck();
-               /* go to target mode */
+         if(unTimer > NFC_DEFAULT_TIMEOUT) {
+            /* cancel command */
+            WriteAck();
+            /* re-execute command */
+            switch(m_eSelectedCommand) {
+            case ECommand::TgInitAsTarget:
+            case ECommand::TgGetData:
+            case ECommand::TgSetData:
+               /* retry target mode */
                WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-            }
-            break;
-         case ECommand::TgInitAsTarget:
-            if(unTimer > NFC_DEFAULT_TIMEOUT) {
-               /* cancel command */
-               WriteAck();
-               /* go to initiator mode */
+               break;
+            case ECommand::InJumpForDEP:
+            case ECommand::InDataExchange:
+               /* retry initiator mode */
                WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
-            }
-            break;
-         default:
-            if(unTimer > NFC_DEFAULT_TIMEOUT) {
-               /* cancel command */
-               WriteAck();
-               /* go to target mode */
-               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
+               break;
+            default:
+               /* try to reinitialize the chip */
+               WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
+               break;
             }
          }
       }
       break;
    }
-   m_unLastStepTimestamp = CClock::GetInstance().GetMilliseconds();
+   return
+}
+/***********************************************************/
+/***********************************************************/
+
+void CNFCController::Reset() {
+   m_eSelectedCommand = ECommand::ConfigureSAM;
+   m_eState = EState::Standby;
+   m_unWatchdogTimer = 0u;
 }
 
 /***********************************************************/

@@ -9,10 +9,10 @@ void* operator new (size_t n, void* ptr) {
 };
 
 template <typename T, size_t length>
-class container {
+class CContainer {
 public:
 
-   ~container() {
+   ~CContainer() {
       for(T& t : *this) t.~T();
    }
 
@@ -25,7 +25,7 @@ public:
    }
 
    template<typename... Arguments>
-   T* insert(const Arguments&... arguments) {
+   T* Insert(const Arguments&... arguments) {
       if(used_count < length) {
          T* created_instance = new (end()) T(arguments...);
          ++used_count;
@@ -36,7 +36,7 @@ public:
       }
    }
 
-   size_t size() {
+   size_t Size() {
       return used_count;
    }
 

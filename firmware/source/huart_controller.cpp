@@ -136,9 +136,9 @@ void CHUARTController::Print(const char* pch_format, ...) {
       return 0;
    }, nullptr);
    /* print */
-	va_list tArguments;
-	va_start(tArguments, pch_format);
+   va_list tArguments;
+   va_start(tArguments, pch_format);
    vfprintf(psOutput, pch_format, tArguments);
-	va_end(tArguments);
+   va_end(tArguments);
 }
 

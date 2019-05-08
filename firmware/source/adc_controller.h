@@ -50,4 +50,5 @@ private:
       /* Enable the ADC and set the prescaler to 64, (8MHz / 64 = 125kHz) */
       ADCSRA |= ((1 << ADEN) | (1 << ADPS2) | (1 << ADPS1));
    }
+
 };
