@@ -91,6 +91,8 @@ void CTaskScheduler::Execute() {
       if(psSelectedController != nullptr) {
          /* update the timestamp */
          psSelectedController->LastUpdate = unTimestamp;
+         /* select the port */
+         CPortController::GetInstance().Select(psSelectedController->Port);
          /* step the controller */
          if(psSelectedController->NFC.Step() == false) {
             /* unrecoverable error detected, trigger hard reset */
