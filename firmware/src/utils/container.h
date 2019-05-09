@@ -19,7 +19,7 @@ public:
    }
 
    const T* begin() const {
-      return begin();
+      return reinterpret_cast<const T*>(data);
    }
 
    T* end() {
@@ -27,7 +27,7 @@ public:
    }
 
    const T* end() const {
-      return end();
+      return begin() + used_count;
    }
 
    template<typename... Arguments>
