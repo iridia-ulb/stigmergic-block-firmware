@@ -1,9 +1,11 @@
+
 #ifndef CLOCK_H
 #define CLOCK_H
  
-#include <interrupt.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+
+#include "interrupt.h"
 
 class CClock {
 public:

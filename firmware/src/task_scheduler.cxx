@@ -1,4 +1,10 @@
+
 #include "task_scheduler.h"
+
+/***********************************************************/
+/***********************************************************/
+
+#include "clock.h"
 
 #define RESET_PERIOD 100
 #define STEP_PERIOD 100
@@ -8,7 +14,8 @@
 
 CTaskScheduler::CTaskScheduler() {
    /* for each connected port */
-   for(EPort e_port : CPortController::GetInstance().GetConnectedPorts()) {
+   for(CPortController::EPort e_port : 
+       CPortController::GetInstance().GetConnectedPorts()) {
       /* create a controller */
       m_cControllers.Insert(e_port);
    }
@@ -97,7 +104,7 @@ void CTaskScheduler::Execute() {
       /* No time sensitive tasks to execute -> execute user code             */
       /***********************************************************************/
       if(m_psUserFunctor) {
-         (*m_psUserFunctor)(un_clock);
+         (*m_psUserFunctor)(unTimestamp);
       }
    }
 }

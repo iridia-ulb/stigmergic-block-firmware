@@ -2,7 +2,7 @@
 
 if [ "${1}" == "load" ]; then
    # make
-   make || exit 1
+   make -C build || exit 1
 fi
 
 # upload code and open picocom sessions in tmux windows

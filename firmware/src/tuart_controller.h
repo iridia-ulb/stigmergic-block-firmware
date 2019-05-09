@@ -2,8 +2,9 @@
 #ifndef TUART_CONTROLLER_H
 #define TUART_CONTROLLER_H
 
-#include <inttypes.h>
-#include <interrupt.h>
+#include <stdint.h>
+
+#include "interrupt.h"
 
 #define IO_BUFFER_SIZE 64
 

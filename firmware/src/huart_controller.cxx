@@ -1,6 +1,13 @@
 
-#include <avr/io.h>
 #include "huart_controller.h"
+
+/***********************************************************/
+/***********************************************************/
+
+#include <avr/io.h>
+
+/***********************************************************/
+/***********************************************************/
 
 #define HUART_RX_BUFFER_MASK ( HUART_RX_BUFFER_SIZE - 1)
 #define HUART_TX_BUFFER_MASK ( HUART_TX_BUFFER_SIZE - 1)
@@ -141,4 +148,7 @@ void CHUARTController::Print(const char* pch_format, ...) {
    vfprintf(psOutput, pch_format, tArguments);
    va_end(tArguments);
 }
+
+/***********************************************************/
+/***********************************************************/
 

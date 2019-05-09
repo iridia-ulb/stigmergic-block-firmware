@@ -1,28 +1,28 @@
+
 #ifndef TASK_SCHEDULER_H
 #define TASK_SCHEDULER_H
 
-#include <nfc_controller.h>
-#include <port_controller.h>
-
 #include <stdint.h>
 
+#include "nfc_controller.h"
+#include "port_controller.h"
 
 class CTaskScheduler {
 public:
    /* user code interface */
    struct SUserFunctor {
-      virtual void operator(uint32_t un_timestamp) {}
+      virtual void operator()(uint32_t un_timestamp) = 0;
    };
 
    // STask // SRxTxTask // SNFCTask
    struct SController {
-      SController(EPort e_port) :
+      SController(CPortController::EPort e_port) :
          Enabled(false),
-         LastUpdateTimestamp(0u),
+         LastUpdate(0u),
          Port(e_port) {}
       bool Enabled;
       uint32_t LastUpdate;
-      EPort Port;
+      CPortController::EPort Port;
       CNFCController NFC;
    };
 
@@ -49,9 +49,8 @@ private:
    SUserFunctor* m_psUserFunctor;
 
    CContainer<SController, 6> m_cControllers;
-
-   
-}
+ 
+};
 
 
 #endif

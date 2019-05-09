@@ -40,20 +40,20 @@ public:
       m_eInitiatorPolicy = e_initiator_policy;
    }
 
-   void SetInitiatorTxFunctor(STxFunctor* ps_tx_functor) {
-      m_psInitiatorTxFunctor = ps_tx_functor;
+   void SetInitiatorTxFunctor(STxFunctor& s_tx_functor) {
+      m_psInitiatorTxFunctor = &s_tx_functor;
    }
 
-   void SetInitiatorRxFunctor(SRxFunctor* ps_rx_functor) {
-      m_psInitiatorRxFunctor = ps_rx_functor;
+   void SetInitiatorRxFunctor(SRxFunctor& s_rx_functor) {
+      m_psInitiatorRxFunctor = &s_rx_functor;
    }
 
-   void SetTargetTxFunctor(STxFunctor* ps_tx_functor) {
-      m_psTargetTxFunctor = ps_tx_functor;
+   void SetTargetTxFunctor(STxFunctor& s_tx_functor) {
+      m_psTargetTxFunctor = &s_tx_functor;
    }
 
-   void SetTargetRxFunctor(SRxFunctor* ps_rx_functor) {
-      m_psTargetRxFunctor = ps_rx_functor;
+   void SetTargetRxFunctor(SRxFunctor& s_rx_functor) {
+      m_psTargetRxFunctor = &s_rx_functor;
    }
 
 private:
@@ -135,7 +135,7 @@ public:
       Standby = 0, WaitingForAck, WaitingForResp,
    };
 
-   enum EInitiatorPolicy {
+   enum class EInitiatorPolicy {
       Continuous,
       Once,
       Disable,

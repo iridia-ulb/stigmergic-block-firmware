@@ -1,7 +1,14 @@
-
-#include <clock.h>
-
 #include "nfc_controller.h"
+
+/***********************************************************/
+/***********************************************************/
+
+#include "clock.h"
+#include "tw_controller.h"
+#include "huart_controller.h"
+
+/***********************************************************/
+/***********************************************************/
 
 #define PN532_PREAMBLE                      (0x00)
 #define PN532_STARTCODE1                    (0x00)
@@ -84,7 +91,7 @@ CNFCController::CNFCController() :
    m_psTargetRxFunctor(nullptr),
    m_psInitiatorTxFunctor(nullptr),
    m_psInitiatorRxFunctor(nullptr),
-   m_eInitiatorPolicy(EInitiatorPolicy::Disabled),
+   m_eInitiatorPolicy(EInitiatorPolicy::Disable),
    m_eSelectedCommand(ECommand::ConfigureSAM),
    m_eState(EState::Standby),
    m_unWatchdogTimer(0u) {}
@@ -232,8 +239,9 @@ bool CNFCController::Step(EEvent e_event) {
       }
       break;
    }
-   return
+   return true;
 }
+
 /***********************************************************/
 /***********************************************************/
 

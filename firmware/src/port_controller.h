@@ -1,7 +1,10 @@
+
 #ifndef PORT_CONTROLLER_H
 #define PORT_CONTROLLER_H
 
-#include <utils/container.h>
+#include <stdint.h>
+
+#include "utils/container.h"
 
 class CPortController {
 
@@ -17,14 +20,7 @@ public:
       Disconnect = 8,
    };
 
-   static const EPort Ports[6] = {
-      EPort::North,
-      EPort::East,
-      EPort::South,
-      EPort::West,
-      EPort::Top,
-      EPort::Bottom,
-   };
+   static EPort Ports[6];
 
    static char PortToChar(EPort e_port);
 

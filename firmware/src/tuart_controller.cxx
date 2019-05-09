@@ -1,45 +1,14 @@
 
+#include "tuart_controller.h"
+
+/***********************************************************/
+/***********************************************************/
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include "tuart_controller.h"
-
-
-/*
-#define ALTSS_USE_TIMER1
-#define INPUT_CAPTURE_PIN		 8 // receive
-#define OUTPUT_COMPARE_A_PIN	 9 // transmit
-#define OUTPUT_COMPARE_B_PIN	 10 // unusable PWM
-
-#define CONFIG_TIMER_NOPRESCALE()	(m_unInterruptMaskRegister = 0, m_unControlRegisterA = 0, m_unControlRegisterB = (1<<ICNC1) | (1<<CS10))
-#define CONFIG_TIMER_PRESCALE_8()	(m_unInterruptMaskRegister = 0, m_unControlRegisterA = 0, m_unControlRegisterB = (1<<ICNC1) | (1<<CS11))
-#define CONFIG_MATCH_NORMAL()		m_unControlRegisterA = m_unControlRegisterA & ~((1<<COM1A1) | (1<<COM1A0))
-#define CONFIG_MATCH_TOGGLE()		(m_unControlRegisterA = (m_unControlRegisterA & ~(1<<COM1A1)) | (1<<COM1A0))
-#define CONFIG_MATCH_CLEAR()		(m_unControlRegisterA = (m_unControlRegisterA | (1<<COM1A1)) & ~(1<<COM1A0))
-#define CONFIG_MATCH_SET()		(m_unControlRegisterA = m_unControlRegisterA | ((1<<COM1A1) | (1<<COM1A0)))
-#define CONFIG_CAPTURE_FALLING_EDGE()	(m_unControlRegisterB &= ~(1<<ICES1))
-#define CONFIG_CAPTURE_RISING_EDGE()	(m_unControlRegisterB |= (1<<ICES1))
-#define ENABLE_INT_INPUT_CAPTURE()	(m_unInterruptFlagRegister = (1<<ICF1), m_unInterruptMaskRegister = (1<<ICIE1))
-#define ENABLE_INT_COMPARE_A()	(m_unInterruptFlagRegister = (1<<OCF1A), m_unInterruptMaskRegister |= (1<<OCIE1A))
-#define ENABLE_INT_COMPARE_B()	(m_unInterruptFlagRegister = (1<<OCF1B), m_unInterruptMaskRegister |= (1<<OCIE1B))
-#define DISABLE_INT_INPUT_CAPTURE()	(m_unInterruptMaskRegister &= ~(1<<ICIE1))
-#define DISABLE_INT_COMPARE_A()	(m_unInterruptMaskRegister &= ~(1<<OCIE1A))
-#define DISABLE_INT_COMPARE_B()	(m_unInterruptMaskRegister &= ~(1<<OCIE1B))
-#define GET_TIMER_COUNT()		(m_unCountRegister)
-#define GET_INPUT_CAPTURE()		(ICR1)
-#define GET_COMPARE_A()		(OCR1A)
-#define GET_COMPARE_B()		(OCR1B)
-#define SET_COMPARE_A(val)		(OCR1A = (val))
-#define SET_COMPARE_B(val)		(OCR1B = (val))
-#define CAPTURE_INTERRUPT		TIMER1_CAPT_vect
-#define COMPARE_A_INTERRUPT		TIMER1_COMPA_vect
-#define COMPARE_B_INTERRUPT		TIMER1_COMPB_vect
-
-
-#ifndef INPUT_PULLUP
-#define INPUT_PULLUP INPUT
-#endif
-*/
+/***********************************************************/
+/***********************************************************/
 
 #define PRESCALE_THRESHOLD 7085
 

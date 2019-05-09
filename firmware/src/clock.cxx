@@ -1,4 +1,8 @@
+
 #include "clock.h"
+
+/***********************************************************/
+/***********************************************************/
 
 #define CLOCK_CYCLES_PER_MICROSECOND() ( F_CPU / 1000000L )
 #define CLOCK_CYCLES_TO_MICROSECONDS(a) ( (a) / CLOCK_CYCLES_PER_MICROSECOND() )
@@ -22,8 +26,8 @@
 #define FRACT_INC ((MICROSECONDS_PER_TIMER0_OVERFLOW % 1000) >> 3)
 #define FRACT_MAX (1000 >> 3)
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 void CClock::COverflowInterrupt::ServiceRoutine() {
    /* copy readings to local variables so they can be stored in registers
@@ -41,16 +45,16 @@ void CClock::COverflowInterrupt::ServiceRoutine() {
    m_pcClock->m_unOverflowCount++;
 }
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 CClock::COverflowInterrupt::COverflowInterrupt(CClock* pc_timer, uint8_t un_intr_vect_num) : 
    m_pcClock(pc_timer) {
    Register(this, un_intr_vect_num);
 }
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 CClock::CClock(volatile uint8_t& un_ctrl_reg_a,
                uint8_t un_ctrl_reg_a_config,
@@ -76,8 +80,8 @@ CClock::CClock(volatile uint8_t& un_ctrl_reg_a,
 
 }
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 uint32_t CClock::GetMilliseconds() const {
    uint32_t unMilliseconds;
@@ -87,8 +91,8 @@ uint32_t CClock::GetMilliseconds() const {
    return unMilliseconds;
 }
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 uint32_t CClock::GetMicroseconds() const {
    uint32_t m;
@@ -102,8 +106,8 @@ uint32_t CClock::GetMicroseconds() const {
    return ((m << 8) + t) * (64 / CLOCK_CYCLES_PER_MICROSECOND());
 }
 
-/****************************************/
-/****************************************/
+/***********************************************************/
+/***********************************************************/
 
 void CClock::Delay(uint32_t un_delay_ms) const {
    uint16_t unStart = static_cast<uint16_t>(GetMicroseconds());
@@ -114,4 +118,7 @@ void CClock::Delay(uint32_t un_delay_ms) const {
       }
    }
 }
+
+/***********************************************************/
+/***********************************************************/
 

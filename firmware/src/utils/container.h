@@ -4,9 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-void* operator new (size_t n, void* ptr) {
-   return ptr;
-};
+void* operator new (size_t n, void* ptr);
 
 template <typename T, size_t length>
 class CContainer {
@@ -20,12 +18,20 @@ public:
       return reinterpret_cast<T*>(data);
    }
 
+   const T* begin() const {
+      return begin();
+   }
+
    T* end() {
       return begin() + used_count;
    }
 
+   const T* end() const {
+      return end();
+   }
+
    template<typename... Arguments>
-   T* Insert(const Arguments&... arguments) {
+   T* Insert(Arguments&... arguments) {
       if(used_count < length) {
          T* created_instance = new (end()) T(arguments...);
          ++used_count;
@@ -36,7 +42,7 @@ public:
       }
    }
 
-   size_t Size() {
+   size_t Size() const {
       return used_count;
    }
 

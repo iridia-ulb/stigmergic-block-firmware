@@ -1,6 +1,13 @@
 
-#include <led_controller.h>
-#include <tw_controller.h>
+#include "led_controller.h"
+
+/***********************************************************/
+/***********************************************************/
+
+#include "tw_controller.h"
+
+/***********************************************************/
+/***********************************************************/
 
 #define PCA963X_RST_ADDR  0x03 
 #define PCA963X_DEV_ADDR  0x18
@@ -10,6 +17,9 @@ const uint8_t CLEDController::m_punResetSequence[] = {
    0xA5, /* reset byte 1 */
    0x5A, /* reset byte 2 */
 };  
+
+/***********************************************************/
+/***********************************************************/
 
 bool CLEDController::Init() {
    /* Write the reset sequence to the reset address */
@@ -28,6 +38,9 @@ bool CLEDController::Init() {
    return bStatus;
 }
 
+/***********************************************************/
+/***********************************************************/
+
 bool CLEDController::SetMode(uint8_t un_led, EMode e_mode) {
    /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(ERegister::LEDOUT0) + (un_led / 4u);
@@ -42,6 +55,9 @@ bool CLEDController::SetMode(uint8_t un_led, EMode e_mode) {
    return bStatus;
 }
 
+/***********************************************************/
+/***********************************************************/
+
 bool CLEDController::SetBrightness(uint8_t un_led, uint8_t un_val) {
    /* get the register responsible for LED un_led */
    uint8_t unRegisterAddr = static_cast<uint8_t>(ERegister::PWM0) + un_led;
@@ -49,9 +65,15 @@ bool CLEDController::SetBrightness(uint8_t un_led, uint8_t un_val) {
    return CTWController::GetInstance().WriteRegister(PCA963X_DEV_ADDR, unRegisterAddr, un_val);
 }
 
+/***********************************************************/
+/***********************************************************/
+
 bool CLEDController::SetBlinkRate(uint8_t un_period, uint8_t un_duty_cycle) {
    bool bStatus = CTWController::GetInstance().WriteRegister(PCA963X_DEV_ADDR, ERegister::GRPFREQ, un_period);
    bStatus = bStatus && CTWController::GetInstance().WriteRegister(PCA963X_DEV_ADDR, ERegister::GRPPWM, un_duty_cycle);
    return bStatus;
 }
+
+/***********************************************************/
+/***********************************************************/
 

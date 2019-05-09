@@ -1,10 +1,16 @@
-// TODO remove
-#include <firmware.h>
 
 #include "port_controller.h"
 
+/***********************************************************/
+/***********************************************************/
+
 #include <avr/io.h>
+
+#include "clock.h"
 #include "tw_controller.h"
+
+/***********************************************************/
+/***********************************************************/
 
 #define PORTC_TWCLK_MASK 0x20
 #define PORT_MUX_MASK 0x0F
@@ -12,7 +18,14 @@
 /***********************************************************/
 /***********************************************************/
 
-char CPortController::PortToChar(EPort e_port);
+CPortController::EPort CPortController::Ports[] = {
+   EPort::North, EPort::East, EPort::South, EPort::West, EPort::Top, EPort::Bottom,
+};
+
+/***********************************************************/
+/***********************************************************/
+
+char CPortController::PortToChar(EPort e_port) {
    switch(e_port) {
    case CPortController::EPort::North:
       return 'N';
@@ -46,7 +59,7 @@ CPortController::CPortController() {
    DDRC |= PORT_MUX_MASK;
    /* disable all ports initially */
    /* safe state, since selected a non-connected face results in stalling the I2C bus on R/W */
-   SelectPort(EPort::Disconnect);
+   Select(EPort::Disconnect);
    /* configure the reset lines to the faces as outputs */
    CTWController::GetInstance().WriteRegister(m_unResetDeviceAddress, ERegister::Configuration, 0xC0);
    /* disable all ports (hold the NFC controllers in reset) */
@@ -70,7 +83,8 @@ CPortController::CPortController() {
          m_cConnectedPorts.Insert(e_port);
       }
    }
-   SelectPort(EPort::Disconnect);
+   /* note that the following line re-enables the CTWController */
+   Select(EPort::Disconnect);
 }
 
 /***********************************************************/
@@ -113,7 +127,7 @@ bool CPortController::Disable(EPort e_port) {
 /***********************************************************/
 /***********************************************************/
 
-void CPortController::SelectPort(EPort e_port) {
+void CPortController::Select(EPort e_port) {
    uint8_t unPortSelector = PORTC;
    unPortSelector &= ~PORT_MUX_MASK;
    unPortSelector |= static_cast<uint8_t>(e_port) & PORT_MUX_MASK;
