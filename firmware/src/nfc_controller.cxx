@@ -34,6 +34,9 @@
 #define NFC_DEFAULT_TIMEOUT                 600
 #define NFC_INITIATOR_TIMEOUT               200
 
+/***********************************************************/
+/***********************************************************/
+
 const uint8_t CNFCController::m_punAckFrame[] = {
     0x00, /* preamble */
     0x00, /* start code 1 */
@@ -217,22 +220,18 @@ bool CNFCController::Step(EEvent e_event) {
          if(unTimer > NFC_DEFAULT_TIMEOUT) {
             /* cancel command */
             WriteAck();
-            /* re-execute command */
-            switch(m_eSelectedCommand) {
-            case ECommand::TgInitAsTarget:
-            case ECommand::TgGetData:
-            case ECommand::TgSetData:
-               /* retry target mode */
-               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
-               break;
-            case ECommand::InJumpForDEP:
-            case ECommand::InDataExchange:
-               /* retry initiator mode */
+            /* execute a command depending on the initiator policy */
+            switch(m_eInitiatorPolicy) {
+            case EInitiatorPolicy::Continuous:
                WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
                break;
-            default:
-               /* try to reinitialize the chip */
-               WriteCmd(ECommand::ConfigureSAM, m_punConfigureSAMArguments, sizeof m_punConfigureSAMArguments);
+            case EInitiatorPolicy::Once:
+               WriteCmd(ECommand::InJumpForDEP, m_punInJumpForDEPArguments, sizeof m_punInJumpForDEPArguments);
+               /* change policy to disable */
+               m_eInitiatorPolicy = EInitiatorPolicy::Disable;
+               break;
+            case EInitiatorPolicy::Disable:
+               WriteCmd(ECommand::TgInitAsTarget, m_punTgInitAsTargetArguments, sizeof m_punTgInitAsTargetArguments);
                break;
             }
          }
