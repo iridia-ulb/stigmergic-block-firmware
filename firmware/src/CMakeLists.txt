@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
 
-project("Stigmeric Block Firmware")
-
 # Use the AVR GCC toolchain
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_CXX_COMPILER avr-g++)
@@ -11,6 +9,8 @@ set(CMAKE_ASM_COMPILER avr-gcc)
 set(AVR "atmega328p")
 set(AVR_FREQ "8000000UL")
 set(AVR_FIRMWARE_NAME firmware)
+
+project("Stigmeric Block Firmware")
 
 # Pass defines to compiler
 add_definitions(
