@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.10)
 
 project("Stigmeric Block Firmware")
 
@@ -21,6 +21,7 @@ set(CMAKE_EXE_LINKER_FLAGS -mmcu=${AVR})
 
 add_compile_options(
     -mmcu=${AVR}
+    -std=c++11
     -Os
     -Wall
     -ffunction-sections
