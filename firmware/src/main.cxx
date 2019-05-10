@@ -2,10 +2,19 @@
 /***********************************************************/
 /***********************************************************/
 
+#include <stdlib.h>
+#include <stdio.h>
+
 #include "clock.h"
 #include "huart_controller.h"
 #include "task_scheduler.h"
 #include "nfc_controller.h"
+
+/***********************************************************/
+/***********************************************************/
+
+#define FONT_BOLD   "\e[1m"
+#define FONT_NORMAL "\e[0m"
 
 /***********************************************************/
 /***********************************************************/
@@ -26,8 +35,8 @@ struct SMyUserFunctor : CTaskScheduler::SUserFunctor {
       CTaskScheduler::SController& Controller;
       SRxCounter RxInitiatorCounter;
       SRxCounter RxTargetCounter;
+      uint32_t RxTotal = 0;
       bool IsInitiator = false;
-      bool IsActive = true;
 
       SFace(CTaskScheduler::SController& s_controller) :
          Controller(s_controller) {}
@@ -35,16 +44,11 @@ struct SMyUserFunctor : CTaskScheduler::SUserFunctor {
 
    /* a collection of the faces */
    CContainer<SFace, 6> Faces;
+   uint32_t LastTimestamp = 0;
+   uint32_t LastDiagnosticsTimestamp = 0;
 
    /* constructor */
    SMyUserFunctor() {
-      /* start debug */
-      CHUARTController::GetInstance().Print("[%05lu] Connected ports: ", CClock::GetInstance().GetMilliseconds());
-      for(CPortController::EPort e_port : CPortController::GetInstance().GetConnectedPorts()) {
-         CHUARTController::GetInstance().Print("%c ", CPortController::PortToChar(e_port));
-      }
-      CHUARTController::GetInstance().Print("\r\n");
-      /* end debug */
       /* create faces on the connected ports */
       for(CTaskScheduler::SController& s_controller : CTaskScheduler::GetInstance().GetControllers()) {
          /* create a face instance */
@@ -58,31 +62,31 @@ struct SMyUserFunctor : CTaskScheduler::SUserFunctor {
    }
 
    virtual void operator()(uint32_t un_timestamp) override {
-      /* logic for when to initiate communication */
-      for(SFace& s_face : Faces) {
-         if(!s_face.IsActive) {
+      /* print diagnostics information and reset the counters each second */
+      if(un_timestamp - LastDiagnosticsTimestamp > 1000) {
+         CHUARTController::GetInstance().Print("[%05lu] ", un_timestamp);
+         for(SFace& s_face : Faces) {
+            char pchBuffer[6];
+            snprintf(pchBuffer, sizeof pchBuffer, "%u/%u", s_face.RxInitiatorCounter.Count, s_face.RxTargetCounter.Count);
+            CHUARTController::GetInstance().Print("%c: %5s ", CPortController::PortToChar(s_face.Controller.Port), pchBuffer);
             if(s_face.IsInitiator) {
-               s_face.Controller.NFC.SetInitiatorPolicy(CNFCController::EInitiatorPolicy::Disable);
-               s_face.IsInitiator = false;
-               s_face.IsActive = true;
+               /* if inactive, transition to target mode */
+               if(s_face.RxInitiatorCounter.Count == 0) {
+                  s_face.Controller.NFC.SetInitiatorPolicy(CNFCController::EInitiatorPolicy::Disable);
+                  s_face.IsInitiator = false;
+               }
             }
             else {
-               /* with low probability */
-               s_face.Controller.NFC.SetInitiatorPolicy(CNFCController::EInitiatorPolicy::Continuous);
-               s_face.IsInitiator = true;
-               s_face.IsActive = true;
+               if(s_face.RxTargetCounter.Count == 0) {
+                  /* if inactive, transition to initiator mode with probability 0.125 */
+                  if(random() < (RANDOM_MAX >> 3)) {
+                     s_face.Controller.NFC.SetInitiatorPolicy(CNFCController::EInitiatorPolicy::Continuous);
+                     s_face.IsInitiator = true;
+                  }
+               }
             }
-         }
-      }
-      /* print diagnostics information and reset the counters every second */
-      if(un_timestamp - LastDiagnosticsTimestamp > 1000) {
-         for(SFace& s_face : Faces) {
-            CHUARTController::GetInstance().Print("%c: %2u/%-2u ", 
-               CPortController::PortToChar(s_face.Controller.Port),
-               s_face.RxInitiatorCounter.Count,
-               s_face.RxTargetCounter.Count);
-            s_face.IsActive = s_face.IsInitiator ?
-               (s_face.RxInitiatorCounter.Count > 0) : (s_face.RxTargetCounter.Count > 0);
+            /* clear the counters */
+            s_face.RxTotal += (s_face.RxInitiatorCounter.Count + s_face.RxTargetCounter.Count);
             s_face.RxInitiatorCounter.Count = 0;
             s_face.RxTargetCounter.Count = 0;
          }
@@ -90,10 +94,20 @@ struct SMyUserFunctor : CTaskScheduler::SUserFunctor {
          /* update diagnostics timestamp */
          LastDiagnosticsTimestamp = un_timestamp;
       }
+      /* print extended diagnostics on key press */
+      if(CHUARTController::GetInstance().HasData()) {
+         while(CHUARTController::GetInstance().HasData()) {
+            CHUARTController::GetInstance().Read();
+         }
+         CHUARTController::GetInstance().Print(FONT_BOLD "[%05lu] ", un_timestamp);
+         for(SFace& s_face : Faces) {
+            CHUARTController::GetInstance().Print("%c: %5u ",
+               CPortController::PortToChar(s_face.Controller.Port),
+               s_face.RxTotal);
+         }
+         CHUARTController::GetInstance().Print(FONT_NORMAL "\r\n");
+      }
    }
-
-   uint32_t LastTimestamp = 0;
-   uint32_t LastDiagnosticsTimestamp = 0;
 };
 
 /***********************************************************/
@@ -112,16 +126,4 @@ int main() {
 
 /***********************************************************/
 /***********************************************************/
-
-void Log(const char* pch_message, bool b_bold) {
-   const char* pchSetBold = "\e[1m";
-   const char* pchClearBold = "\e[0m";
-
-   uint32_t un_time = CClock::GetInstance().GetMilliseconds();
-   CHUARTController::GetInstance().Print("[%05lu] %s%s%s\r\n", un_time, (b_bold ? pchSetBold : ""), pch_message, pchClearBold);
-}
-
-/***********************************************************/
-/***********************************************************/
-
 
